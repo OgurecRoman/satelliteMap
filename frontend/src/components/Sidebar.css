@@ -1,20 +1,4 @@
-/* ЛЕВАЯ ПАНЕЛЬ */
-.sidebar-left {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    width: 280px;
-    max-height: 90vh;
-    background: rgba(30, 30, 40, 0.95);
-    backdrop-filter: blur(10px);
-    border-radius: 12px;
-    padding: 16px;
-    color: white;
-    z-index: 1000;
-    overflow-y: auto;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    font-family: sans-serif;
-}
+
 
 /* ПРАВАЯ ПАНЕЛЬ */
 .sidebar-right {
@@ -248,18 +232,6 @@
     width: 4px;
 }
 
-.sidebar-left::-webkit-scrollbar-track,
-.sidebar-right::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-}
-
-.sidebar-left::-webkit-scrollbar-thumb,
-.sidebar-right::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 2px;
-}
-
 /* Блок скорости */
 .speed-section {
     margin-top: 16px;
@@ -475,7 +447,7 @@
     position: fixed;
     top: 20px;
     left: 20px;
-    width: 300px;
+    width: 320px;
     max-height: 90vh;
     background: rgba(20, 20, 30, 0.95);
     backdrop-filter: blur(12px);
@@ -673,4 +645,26 @@
 
 .sidebar-left::-webkit-scrollbar-thumb:hover {
     background: #61dafb;
+}
+
+/* Стили для вкладок в аналитике */
+.tab-btn {
+    flex: 1;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+    background: rgba(97, 218, 251, 0.2);
+    color: #61dafb;
+}
+
+.tab-btn:hover:not(.active) {
+    background: rgba(97, 218, 251, 0.1);
 }

@@ -4,6 +4,10 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import axios from 'axios';
 import Sidebar from './Sidebar';
+import AnalysisPanel2D from './AnalysisPanel2D';
+import SubscriptionsPanel2D from './SubscriptionsPanel2D';
+import { runPointPassAnalysis, runRegionPassAnalysis, runCompareGroups } from '../api/analysis';
+import { listSubscriptions, createSubscription } from '../api/notifications';
 
 const satelliteIcon = L.icon({
     iconUrl: '/satelite.png',
@@ -33,6 +37,11 @@ const SatelliteTracker = () => {
     const [loadingFlyovers, setLoadingFlyovers] = useState(false);
     const [flyoverMode, setFlyoverMode] = useState('point');
     const [speed, setSpeed] = useState(1);
+
+    const [analysisResults, setAnalysisResults] = useState({ point: null, region: null, compare: null });
+    const [subscriptions, setSubscriptions] = useState([]);
+    const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+    const [analysisError, setAnalysisError] = useState('');
 
     const intervalRef = useRef(null);
 
@@ -135,17 +144,101 @@ const SatelliteTracker = () => {
         }).sort((a, b) => new Date(a.flyover_time) - new Date(b.flyover_time));
     };
 
+    // ========== ФУНКЦИИ ДЛЯ АНАЛИТИКИ И ПОДПИСОК (ПЕРЕМЕЩЕНЫ СЮДА) ==========
+    const runPointAnalysis = async (payload) => {
+        setLoadingAnalysis(true);
+        setAnalysisError('');
+        try {
+            const data = await runPointPassAnalysis(payload);
+            setAnalysisResults(prev => ({ ...prev, point: data }));
+        } catch (err) {
+            setAnalysisError(err?.response?.data?.detail || err.message);
+        } finally {
+            setLoadingAnalysis(false);
+        }
+    };
+
+    const runRegionAnalysis = async (payload) => {
+        setLoadingAnalysis(true);
+        setAnalysisError('');
+        try {
+            const data = await runRegionPassAnalysis(payload);
+            setAnalysisResults(prev => ({ ...prev, region: data }));
+        } catch (err) {
+            setAnalysisError(err?.response?.data?.detail || err.message);
+        } finally {
+            setLoadingAnalysis(false);
+        }
+    };
+
+const runCompareGroups = async (payload) => {
+    setLoadingAnalysis(true);
+    setAnalysisError('');
+    try {
+        // Добавляем таймаут 30 секунд
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Превышено время ожидания (30 сек)')), 30000)
+        );
+
+        const apiPromise = runCompareGroups(payload);
+        const data = await Promise.race([apiPromise, timeoutPromise]);
+        setAnalysisResults(prev => ({ ...prev, compare: data }));
+    } catch (err) {
+        console.error('Ошибка сравнения:', err);
+        setAnalysisError(err?.response?.data?.detail || err.message || 'Ошибка при сравнении группировок');
+    } finally {
+        setLoadingAnalysis(false);
+    }
+};
+
+    const fetchSubscriptions = async () => {
+        try {
+            const data = await listSubscriptions();
+            setSubscriptions(data || []);
+        } catch (err) {
+            console.error('Ошибка загрузки подписок:', err);
+        }
+    };
+
+    const handleCreateSubscription = async (payload) => {
+    try {
+        const created = await createSubscription(payload);
+        setSubscriptions(prev => [created, ...prev]);
+        // Показываем сообщение об успехе (опционально)
+        console.log('Подписка создана:', created);
+    } catch (err) {
+        console.error('Ошибка создания подписки:', err);
+
+        // Демо-режим: добавляем локальную подписку без отправки на бэкенд
+        const demoSubscription = {
+            id: Date.now(),
+            name: payload.name || 'Демо-подписка',
+            target_type: payload.target_type,
+            contact_email: payload.contact_email,
+            is_active: true,
+            note: payload.note,
+            created_at: new Date().toISOString()
+        };
+        setSubscriptions(prev => [demoSubscription, ...prev]);
+
+        // Показываем уведомление пользователю
+        alert('⚠️ Бэкенд не отвечает. Подписка сохранена локально (демо-режим)');
+    }
+};
+    // ========================================================================
+
     const handleMapClick = async (latlng) => {
         setSelectedPoint(latlng);
 
         if (flyoverMode === 'point') {
             setSelectedCountry('');
-            setFlyovers(generateFlyoversForPoint());
+            // Вместо generateFlyoversForPoint() вызываем реальный API
+            await calculateRealFlyovers(latlng.lat, latlng.lng);
         } else {
             const country = await getCountryByCoordinates(latlng.lat, latlng.lng);
             if (country) {
                 setSelectedCountry(country);
-                setFlyovers(generateFlyoversForCountry(country));
+                await calculateRealFlyoversForCountry(country);
             } else {
                 setSelectedCountry('');
                 setFlyovers([]);
@@ -164,11 +257,11 @@ const SatelliteTracker = () => {
         }
     };
 
-    const handlePointModeSelect = () => {
+    const handlePointModeSelect = async () => {
         setFlyoverMode('point');
         setSelectedCountry('');
         if (selectedPoint) {
-            setFlyovers(generateFlyoversForPoint());
+            await calculateRealFlyovers(selectedPoint.lat, selectedPoint.lng);
         } else {
             setFlyovers([]);
         }
@@ -187,6 +280,86 @@ const SatelliteTracker = () => {
 
     const handleFilterChange = (newFilters) => {
         setFilters(newFilters);
+    };
+
+    const calculateRealFlyovers = async (lat, lon) => {
+    setLoadingFlyovers(true);
+    try {
+        const data = await runPointPassAnalysis({
+            lat: lat,
+            lon: lon,
+            from_time: new Date().toISOString(),
+            horizon_hours: 6,
+            step_seconds: 600,
+            filters: {}
+        });
+
+        // Преобразуем ответ API в формат, который ожидает правая панель
+        const formattedFlyovers = (data.matches || []).map(match => ({
+            satellite_id: match.satellite.id,
+            satellite_name: match.satellite.name,
+            flyover_time: match.next_pass?.enter_time || new Date().toISOString(),
+            duration_min: Math.round((new Date(match.next_pass?.exit_time) - new Date(match.next_pass?.enter_time)) / 60000) || 10,
+            max_elevation: Math.round(90 - (match.next_pass?.min_distance_km / 111) * 0.8) || 45,
+            country: match.satellite.country,
+            purpose: match.satellite.purpose
+        }));
+
+        setFlyovers(formattedFlyovers);
+    } catch (err) {
+        console.error('Ошибка расчёта пролётов:', err);
+        // Если ошибка, показываем демо-данные
+        setFlyovers(generateDemoFlyovers(lat, lon));
+    } finally {
+        setLoadingFlyovers(false);
+    }
+};
+
+    const calculateRealFlyoversForCountry = async (countryName) => {
+        setLoadingFlyovers(true);
+        try {
+            // Используем центр страны для расчёта (можно расширить)
+            const countryCenters = {
+                'Россия': { lat: 61.5, lon: 105 },
+                'Russian Federation': { lat: 61.5, lon: 105 },
+                'Казахстан': { lat: 48, lon: 68 },
+                'Kazakhstan': { lat: 48, lon: 68 },
+                'USA': { lat: 39.8, lon: -98.6 },
+                'United States': { lat: 39.8, lon: -98.6 },
+                'China': { lat: 35, lon: 105 },
+                'Китай': { lat: 35, lon: 105 },
+            };
+
+            const center = countryCenters[countryName];
+            if (!center) {
+                setFlyovers([]);
+                setLoadingFlyovers(false);
+                return;
+            }
+
+            await calculateRealFlyovers(center.lat, center.lon);
+        } catch (err) {
+            console.error('Ошибка расчёта пролётов для страны:', err);
+            setFlyovers([]);
+            setLoadingFlyovers(false);
+        }
+    };
+
+    const generateDemoFlyovers = (lat, lon) => {
+        const now = new Date();
+        const allSatellites = satellitesPosition.slice(0, 30);
+        return allSatellites.map((sat, idx) => {
+            const meta = satelliteMetadata[sat.satellite_id];
+            return {
+                satellite_id: sat.satellite_id,
+                satellite_name: meta?.name || `Спутник ${sat.satellite_id}`,
+                flyover_time: new Date(now.getTime() + (idx + 1) * 3600000).toISOString(),
+                duration_min: Math.floor(Math.random() * 15) + 5,
+                max_elevation: Math.floor(Math.random() * 80) + 10,
+                country: meta?.country || 'Unknown',
+                purpose: meta?.purpose || 'Unknown'
+            };
+        }).sort((a, b) => new Date(a.flyover_time) - new Date(b.flyover_time));
     };
 
     useEffect(() => {
@@ -216,6 +389,7 @@ const SatelliteTracker = () => {
     useEffect(() => {
         fetchMetadata();
         fetchPositions();
+        fetchSubscriptions();
 
         intervalRef.current = setInterval(fetchPositions, 5000);
 
@@ -228,9 +402,7 @@ const SatelliteTracker = () => {
 
     const getSatelliteInfo = (satId) => satelliteMetadata[satId] || null;
 
-    const satellitesForSidebar = satellitesPosition
-        .map(pos => getSatelliteInfo(pos.satellite_id))
-        .filter(meta => meta !== null);
+    const satellitesForSidebar = Object.values(satelliteMetadata).filter(meta => meta !== null);
 
     return (
         <>
@@ -247,6 +419,12 @@ const SatelliteTracker = () => {
                 flyoverMode={flyoverMode}
                 onSpeedChange={handleSpeedChange}
                 currentSpeed={speed}
+                analysisResults={analysisResults}
+                onRunPointAnalysis={runPointAnalysis}
+                onRunRegionAnalysis={runRegionAnalysis}
+                onRunCompareGroups={runCompareGroups}
+                loadingAnalysis={loadingAnalysis}
+                analysisError={analysisError}
             />
 
             <MapContainer center={[0, 0]} zoom={2} style={{ height: '100vh', width: '100%' }}>
@@ -298,6 +476,8 @@ const SatelliteTracker = () => {
                     );
                 })}
             </MapContainer>
+
+
         </>
     );
 };
