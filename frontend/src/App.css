@@ -1,5 +1,6 @@
 .App {
   text-align: center;
+  position: relative;
 }
 
 .App-logo {
@@ -35,4 +36,16 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Убираем дефолтные отступы, чтобы карта занимала весь экран */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Чтобы карта не перекрывала сайдбар */
+.leaflet-container {
+  z-index: 1;
 }
