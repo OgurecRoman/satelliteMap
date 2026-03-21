@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: public_site_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: satmon
+      POSTGRES_USER: satmon_user
+      POSTGRES_PASSWORD: strong_password_here
+    volumes:
+      - public_site_postgres_data:/var/lib/postgresql/data
+    networks:
+      - public_site_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: public_site_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    networks:
+      - public_site_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_BASE_URL: /api/v1
+        FANCY: "false"
+    container_name: public_site_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    networks:
+      - public_site_net
+
+networks:
+  public_site_net:
+    driver: bridge
+
+volumes:
+  public_site_postgres_data:
