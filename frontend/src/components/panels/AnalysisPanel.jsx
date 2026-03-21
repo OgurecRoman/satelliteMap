@@ -3,8 +3,8 @@ import { formatCoordinate } from '../../utils/coordinates';
 import { formatTimestamp } from '../../utils/time';
 
 const DEFAULT_REGION = { min_lat: 50, min_lon: 30, max_lat: 60, max_lon: 40 };
-const DEFAULT_GROUP_A = { name: 'Group A', country: '', operator: '', orbit_type: 'LEO', purpose: '' };
-const DEFAULT_GROUP_B = { name: 'Group B', country: '', operator: '', orbit_type: '', purpose: 'Earth observation' };
+const DEFAULT_GROUP_A = { name: 'Группа A', country: '', operator: '', orbit_type: 'LEO', purpose: '' };
+const DEFAULT_GROUP_B = { name: 'Группа B', country: '', operator: '', orbit_type: '', purpose: 'Earth observation' };
 
 export default function AnalysisPanel({
   currentTime,
@@ -26,7 +26,7 @@ export default function AnalysisPanel({
   const [groupA, setGroupA] = useState(DEFAULT_GROUP_A);
   const [groupB, setGroupB] = useState(DEFAULT_GROUP_B);
   const [subscriptionForm, setSubscriptionForm] = useState({
-    name: 'Pass alert',
+    name: 'Оповещение о пролёте',
     target_type: 'point',
     contact_email: '',
     note: '',
@@ -46,16 +46,14 @@ export default function AnalysisPanel({
 
   const pointValues = { lat: pointForm.lat, lon: pointForm.lon };
 
-  const buildFilters = (group) => {
-    return Object.fromEntries(
-      Object.entries({
-        country: group.country,
-        operator: group.operator,
-        orbit_type: group.orbit_type,
-        purpose: group.purpose,
-      }).filter(([, value]) => value)
-    );
-  };
+  const buildFilters = (group) => Object.fromEntries(
+    Object.entries({
+      country: group.country,
+      operator: group.operator,
+      orbit_type: group.orbit_type,
+      purpose: group.purpose,
+    }).filter(([, value]) => value)
+  );
 
   const submitPointAnalysis = () => {
     onRunPointAnalysis({
@@ -87,8 +85,8 @@ export default function AnalysisPanel({
   const submitCompareGroups = () => {
     onRunCompareGroups({
       groups: [
-        { name: groupA.name || 'Group A', filters: buildFilters(groupA) },
-        { name: groupB.name || 'Group B', filters: buildFilters(groupB) },
+        { name: groupA.name || 'Группа A', filters: buildFilters(groupA) },
+        { name: groupB.name || 'Группа B', filters: buildFilters(groupB) },
       ],
     });
   };
@@ -124,36 +122,36 @@ export default function AnalysisPanel({
   return (
     <section className="panel-section">
       <div className="section-header">
-        <h3>Analytics & alerts</h3>
-        {loading ? <span className="status-pill">Working…</span> : null}
+        <h3>Аналитика и оповещения</h3>
+        {loading ? <span className="status-pill">Выполняется…</span> : null}
       </div>
       {error ? <div className="error-banner">{error}</div> : null}
 
       <div className="stack-card">
-        <h4>Point pass analysis</h4>
-        <p className="muted-text">Use the point selected on the globe or override the coordinates below.</p>
+        <h4>Анализ пролётов над точкой</h4>
+        <p className="muted-text">Используйте точку, выбранную на глобусе, или вручную задайте координаты ниже.</p>
         <div className="field-grid two-columns">
           <div>
-            <label className="field-label">Latitude</label>
+            <label className="field-label">Широта</label>
             <input type="number" value={pointValues.lat} onChange={(event) => setPointForm((prev) => ({ ...prev, lat: event.target.value }))} />
           </div>
           <div>
-            <label className="field-label">Longitude</label>
+            <label className="field-label">Долгота</label>
             <input type="number" value={pointValues.lon} onChange={(event) => setPointForm((prev) => ({ ...prev, lon: event.target.value }))} />
           </div>
           <div>
-            <label className="field-label">Horizon (hours)</label>
+            <label className="field-label">Горизонт, часов</label>
             <input type="number" value={pointForm.horizon_hours} onChange={(event) => setPointForm((prev) => ({ ...prev, horizon_hours: event.target.value }))} />
           </div>
           <div>
-            <label className="field-label">Step (sec)</label>
+            <label className="field-label">Шаг, сек</label>
             <input type="number" value={pointForm.step_seconds} onChange={(event) => setPointForm((prev) => ({ ...prev, step_seconds: event.target.value }))} />
           </div>
         </div>
-        <button type="button" className="primary-button full-width" onClick={submitPointAnalysis}>Run point analysis</button>
+        <button type="button" className="primary-button full-width" onClick={submitPointAnalysis}>Запустить анализ точки</button>
         {results.point ? (
           <div className="result-box">
-            <strong>{results.point.matches.length}</strong> matches found
+            <strong>{results.point.matches.length}</strong> совпадений найдено
             <div className="result-list">
               {results.point.matches.slice(0, 5).map((item) => (
                 <div key={`${item.satellite.id}-${item.next_pass.enter_time}`} className="result-item">
@@ -163,7 +161,7 @@ export default function AnalysisPanel({
                   </div>
                   <div>
                     <p>{formatTimestamp(item.next_pass.enter_time)}</p>
-                    <p className="muted-text">Min distance {formatCoordinate(item.next_pass.min_distance_km)} km</p>
+                    <p className="muted-text">Мин. дистанция {formatCoordinate(item.next_pass.min_distance_km)} км</p>
                   </div>
                 </div>
               ))}
@@ -173,45 +171,45 @@ export default function AnalysisPanel({
       </div>
 
       <div className="stack-card">
-        <h4>Region pass analysis</h4>
+        <h4>Анализ пролётов над регионом</h4>
         <div className="field-grid two-columns">
           {Object.keys(DEFAULT_REGION).map((key) => (
             <div key={key}>
-              <label className="field-label">{key.replace('_', ' ')}</label>
+              <label className="field-label">{translateRegionField(key)}</label>
               <input type="number" value={regionForm[key]} onChange={(event) => setRegionForm((prev) => ({ ...prev, [key]: event.target.value }))} />
             </div>
           ))}
           <div>
-            <label className="field-label">Horizon (hours)</label>
+            <label className="field-label">Горизонт, часов</label>
             <input type="number" value={regionForm.horizon_hours} onChange={(event) => setRegionForm((prev) => ({ ...prev, horizon_hours: event.target.value }))} />
           </div>
           <div>
-            <label className="field-label">Step (sec)</label>
+            <label className="field-label">Шаг, сек</label>
             <input type="number" value={regionForm.step_seconds} onChange={(event) => setRegionForm((prev) => ({ ...prev, step_seconds: event.target.value }))} />
           </div>
         </div>
-        <button type="button" className="secondary-button full-width" onClick={submitRegionAnalysis}>Run region analysis</button>
-        {results.region ? <div className="result-box"><strong>{results.region.matches.length}</strong> satellites intersect the region</div> : null}
+        <button type="button" className="secondary-button full-width" onClick={submitRegionAnalysis}>Запустить анализ региона</button>
+        {results.region ? <div className="result-box"><strong>{results.region.matches.length}</strong> спутников пересекают выбранный регион</div> : null}
       </div>
 
       <div className="stack-card">
-        <h4>Compare groups</h4>
+        <h4>Сравнение группировок</h4>
         <div className="field-grid two-columns">
-          <GroupEditor title="Group A" value={groupA} onChange={setGroupA} filterOptions={filterOptions} />
-          <GroupEditor title="Group B" value={groupB} onChange={setGroupB} filterOptions={filterOptions} />
+          <GroupEditor title="Группа A" value={groupA} onChange={setGroupA} filterOptions={filterOptions} />
+          <GroupEditor title="Группа B" value={groupB} onChange={setGroupB} filterOptions={filterOptions} />
         </div>
-        <button type="button" className="secondary-button full-width" onClick={submitCompareGroups}>Compare groups</button>
+        <button type="button" className="secondary-button full-width" onClick={submitCompareGroups}>Сравнить группировки</button>
         {results.compare ? (
           <div className="result-list">
             {results.compare.groups.map((group) => (
               <div key={group.name} className="result-item compact">
                 <div>
                   <strong>{group.name}</strong>
-                  <p>{group.count} satellites</p>
+                  <p>{group.count} спутников</p>
                 </div>
                 <div>
-                  <p>Avg alt {formatCoordinate(group.avg_altitude_km)} km</p>
-                  <p className="muted-text">Avg period {formatCoordinate(group.avg_period_minutes)} min</p>
+                  <p>Средняя высота {formatCoordinate(group.avg_altitude_km)} км</p>
+                  <p className="muted-text">Средний период {formatCoordinate(group.avg_period_minutes)} мин</p>
                 </div>
               </div>
             ))}
@@ -220,43 +218,43 @@ export default function AnalysisPanel({
       </div>
 
       <div className="stack-card">
-        <h4>Subscriptions</h4>
+        <h4>Подписки</h4>
         <div className="field-grid two-columns">
           <div>
-            <label className="field-label">Name</label>
+            <label className="field-label">Название</label>
             <input type="text" value={subscriptionForm.name} onChange={(event) => setSubscriptionForm((prev) => ({ ...prev, name: event.target.value }))} />
           </div>
           <div>
-            <label className="field-label">Target type</label>
+            <label className="field-label">Тип цели</label>
             <select value={subscriptionForm.target_type} onChange={(event) => setSubscriptionForm((prev) => ({ ...prev, target_type: event.target.value }))}>
-              <option value="point">Point</option>
-              <option value="region">Region</option>
+              <option value="point">Точка</option>
+              <option value="region">Регион</option>
             </select>
           </div>
           <div>
-            <label className="field-label">Contact email</label>
+            <label className="field-label">E-mail для уведомления</label>
             <input type="email" value={subscriptionForm.contact_email} onChange={(event) => setSubscriptionForm((prev) => ({ ...prev, contact_email: event.target.value }))} />
           </div>
           <div>
-            <label className="field-label">Selected satellite</label>
-            <input type="text" value={selectedSatelliteId || 'Any'} readOnly />
+            <label className="field-label">Выбранный спутник</label>
+            <input type="text" value={selectedSatelliteId || 'Любой'} readOnly />
           </div>
         </div>
-        <label className="field-label">Note</label>
+        <label className="field-label">Заметка</label>
         <textarea value={subscriptionForm.note} rows={2} onChange={(event) => setSubscriptionForm((prev) => ({ ...prev, note: event.target.value }))} />
-        <button type="button" className="primary-button full-width" onClick={submitSubscription}>Create subscription</button>
+        <button type="button" className="primary-button full-width" onClick={submitSubscription}>Создать подписку</button>
         <div className="result-box">
-          <strong>{subscriptions.length}</strong> saved subscriptions
+          <strong>{subscriptions.length}</strong> сохранённых подписок
           <div className="result-list">
             {subscriptions.slice(0, 5).map((item) => (
               <div key={item.id} className="result-item compact">
                 <div>
                   <strong>{item.name}</strong>
-                  <p>{item.target_type}</p>
+                  <p>{item.target_type === 'point' ? 'Точка' : 'Регион'}</p>
                 </div>
                 <div>
-                  <p>{item.is_active ? 'Active' : 'Inactive'}</p>
-                  <p className="muted-text">{item.contact_email || 'No email'}</p>
+                  <p>{item.is_active ? 'Активна' : 'Неактивна'}</p>
+                  <p className="muted-text">{item.contact_email || 'Без e-mail'}</p>
                 </div>
               </div>
             ))}
@@ -273,28 +271,38 @@ function GroupEditor({ title, value, onChange, filterOptions }) {
   return (
     <div className="info-card compact-card">
       <h5>{title}</h5>
-      <label className="field-label">Name</label>
+      <label className="field-label">Название</label>
       <input type="text" value={value.name} onChange={(event) => update('name', event.target.value)} />
-      <label className="field-label">Country</label>
+      <label className="field-label">Страна</label>
       <select value={value.country} onChange={(event) => update('country', event.target.value)}>
-        <option value="">Any</option>
+        <option value="">Любая</option>
         {(filterOptions.countries || []).map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
-      <label className="field-label">Operator</label>
+      <label className="field-label">Оператор</label>
       <select value={value.operator} onChange={(event) => update('operator', event.target.value)}>
-        <option value="">Any</option>
+        <option value="">Любой</option>
         {(filterOptions.operators || []).map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
-      <label className="field-label">Orbit</label>
+      <label className="field-label">Тип орбиты</label>
       <select value={value.orbit_type} onChange={(event) => update('orbit_type', event.target.value)}>
-        <option value="">Any</option>
+        <option value="">Любой</option>
         {(filterOptions.orbit_types || []).map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
-      <label className="field-label">Purpose</label>
+      <label className="field-label">Назначение</label>
       <select value={value.purpose} onChange={(event) => update('purpose', event.target.value)}>
-        <option value="">Any</option>
+        <option value="">Любое</option>
         {(filterOptions.purposes || []).map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
     </div>
   );
+}
+
+function translateRegionField(field) {
+  const labels = {
+    min_lat: 'Мин. широта',
+    min_lon: 'Мин. долгота',
+    max_lat: 'Макс. широта',
+    max_lon: 'Макс. долгота',
+  };
+  return labels[field] || field;
 }

@@ -4,10 +4,19 @@ import SatelliteTracker from './components/SatelliteTracker';
 import Earth3D from './components/Earth3D';
 import TimeControls from './components/controls/TimeControls';
 import FiltersPanel from './components/panels/FiltersPanel';
+import SatellitePickerPanel from './components/panels/SatellitePickerPanel';
 import SatelliteDetailsPanel from './components/panels/SatelliteDetailsPanel';
 import AnalysisPanel from './components/panels/AnalysisPanel';
 import useSimulationClock from './hooks/useSimulationClock';
-import { getSatelliteCard, getSatelliteCoverage, getSatelliteFilters, getSatellitePositions, getSatellites, getSatelliteTrack, getSatelliteVisibility } from './api/satellites';
+import {
+  getSatelliteCard,
+  getSatelliteCoverage,
+  getSatelliteFilters,
+  getSatellitePositions,
+  getSatellites,
+  getSatelliteTrack,
+  getSatelliteVisibility,
+} from './api/satellites';
 import { runCompareGroups, runPointPassAnalysis, runRegionPassAnalysis } from './api/analysis';
 import { createSubscription, listSubscriptions } from './api/notifications';
 
@@ -47,11 +56,7 @@ function App() {
     setLoadingState((prev) => ({ ...prev, filters: true }));
     getSatelliteFilters()
       .then((data) => { if (!ignore) setFilterOptions(data); })
-      .catch((error) => {
-        if (!ignore) {
-          setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Failed to load filter options.') }));
-        }
-      })
+      .catch((error) => { if (!ignore) setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Не удалось загрузить наборы фильтров.') })); })
       .finally(() => { if (!ignore) setLoadingState((prev) => ({ ...prev, filters: false })); });
     return () => { ignore = true; };
   }, []);
@@ -62,11 +67,7 @@ function App() {
     setLoadingState((prev) => ({ ...prev, metadata: true }));
     getSatellites(sanitizeFilters(filters))
       .then((data) => { if (!ignore) setSatellitesMeta(data.items || []); })
-      .catch((error) => {
-        if (!ignore) {
-          setErrorState((prev) => ({ ...prev, positions: formatApiError(error, 'Failed to load satellite metadata.') }));
-        }
-      })
+      .catch((error) => { if (!ignore) setErrorState((prev) => ({ ...prev, positions: formatApiError(error, 'Не удалось загрузить метаданные спутников.') })); })
       .finally(() => { if (!ignore) setLoadingState((prev) => ({ ...prev, metadata: false })); });
     return () => { ignore = true; };
   }, [activeView, filters]);
@@ -78,11 +79,7 @@ function App() {
     setErrorState((prev) => ({ ...prev, positions: '' }));
     getSatellitePositions({ ...sanitizeFilters(filters), timestamp: currentTime.toISOString() })
       .then((data) => { if (!ignore) setPositions(data || []); })
-      .catch((error) => {
-        if (!ignore) {
-          setErrorState((prev) => ({ ...prev, positions: formatApiError(error, 'Failed to load satellite positions.') }));
-        }
-      })
+      .catch((error) => { if (!ignore) setErrorState((prev) => ({ ...prev, positions: formatApiError(error, 'Не удалось загрузить текущие позиции спутников.') })); })
       .finally(() => { if (!ignore) setLoadingState((prev) => ({ ...prev, positions: false })); });
     return () => { ignore = true; };
   }, [activeView, currentTime, filters]);
@@ -130,11 +127,7 @@ function App() {
           setCoverageFootprint(coverageData);
         }
       })
-      .catch((error) => {
-        if (!ignore) {
-          setErrorState((prev) => ({ ...prev, card: formatApiError(error, 'Failed to load the selected satellite details.') }));
-        }
-      })
+      .catch((error) => { if (!ignore) setErrorState((prev) => ({ ...prev, card: formatApiError(error, 'Не удалось загрузить данные выбранного спутника.') })); })
       .finally(() => { if (!ignore) setLoadingState((prev) => ({ ...prev, card: false })); });
 
     return () => { ignore = true; };
@@ -150,9 +143,7 @@ function App() {
   useEffect(() => {
     if (!selectedSatelliteId) return;
     const stillVisible = satellitesFor3D.some((item) => item.satellite_id === selectedSatelliteId);
-    if (!stillVisible) {
-      setSelectedSatelliteId(null);
-    }
+    if (!stillVisible) setSelectedSatelliteId(null);
   }, [satellitesFor3D, selectedSatelliteId]);
 
   const runPointAnalysis = async (payload) => {
@@ -162,7 +153,7 @@ function App() {
       const data = await runPointPassAnalysis(payload);
       setPointAnalysisResult(data);
     } catch (error) {
-      setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Point analysis failed.') }));
+      setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Не удалось выполнить анализ пролётов над точкой.') }));
     } finally {
       setLoadingState((prev) => ({ ...prev, analysis: false }));
     }
@@ -175,7 +166,7 @@ function App() {
       const data = await runRegionPassAnalysis(payload);
       setRegionAnalysisResult(data);
     } catch (error) {
-      setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Region analysis failed.') }));
+      setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Не удалось выполнить анализ пролётов над регионом.') }));
     } finally {
       setLoadingState((prev) => ({ ...prev, analysis: false }));
     }
@@ -188,7 +179,7 @@ function App() {
       const data = await runCompareGroups(payload);
       setCompareResult(data);
     } catch (error) {
-      setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Group comparison failed.') }));
+      setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Не удалось сравнить группировки.') }));
     } finally {
       setLoadingState((prev) => ({ ...prev, analysis: false }));
     }
@@ -201,7 +192,7 @@ function App() {
       const created = await createSubscription(payload);
       setSubscriptions((prev) => [created, ...prev]);
     } catch (error) {
-      setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Subscription creation failed.') }));
+      setErrorState((prev) => ({ ...prev, analysis: formatApiError(error, 'Не удалось создать подписку.') }));
     } finally {
       setLoadingState((prev) => ({ ...prev, analysis: false }));
     }
@@ -215,14 +206,14 @@ function App() {
         <div className="brand-block">
           <div className="brand-mark">🛰️</div>
           <div>
-            <p className="eyebrow">Hackathon MVP</p>
-            <h1>Satellite pass monitoring platform</h1>
+            <p className="eyebrow">Хакатон MVP</p>
+            <h1>Платформа мониторинга пролётов спутников</h1>
           </div>
         </div>
 
-        <div className="mode-toggle" role="tablist" aria-label="View mode selector">
-          <button type="button" className={activeView === '2d' ? 'toggle-button toggle-active' : 'toggle-button'} onClick={() => setActiveView('2d')}>2D map</button>
-          <button type="button" className={activeView === '3d' ? 'toggle-button toggle-active' : 'toggle-button'} onClick={() => setActiveView('3d')}>3D globe</button>
+        <div className="mode-toggle" role="tablist" aria-label="Переключатель режима отображения">
+          <button type="button" className={activeView === '2d' ? 'toggle-button toggle-active' : 'toggle-button'} onClick={() => setActiveView('2d')}>2D-карта</button>
+          <button type="button" className={activeView === '3d' ? 'toggle-button toggle-active' : 'toggle-button'} onClick={() => setActiveView('3d')}>3D-глобус</button>
         </div>
       </header>
 
@@ -231,68 +222,34 @@ function App() {
           <div className="view-layer view-layer-2d">
             <SatelliteTracker />
             <div className="floating-note left-note">
-              <strong>2D mode preserved</strong>
-              <p>Existing Leaflet implementation is kept intact. Only the app shell and the 2D/3D switch are added around it.</p>
+              <strong>2D-режим сохранён</strong>
+              <p>Существующая Leaflet-реализация не переписывалась. Добавлены только общая оболочка приложения и переключатель режимов.</p>
             </div>
           </div>
         ) : (
           <div className="view-layer view-layer-3d">
-            <Earth3D
-              satellites={satellitesFor3D}
-              selectedSatelliteId={selectedSatelliteId}
-              onSelectSatellite={setSelectedSatelliteId}
-              onSelectPoint={setSelectedPoint}
-              selectedPoint={selectedPoint}
-              track={track}
-              visibilityFootprint={visibilityFootprint}
-              coverageFootprint={coverageFootprint}
-            />
-
+            <Earth3D satellites={satellitesFor3D} selectedSatelliteId={selectedSatelliteId} onSelectSatellite={setSelectedSatelliteId} onSelectPoint={setSelectedPoint} selectedPoint={selectedPoint} track={track} visibilityFootprint={visibilityFootprint} coverageFootprint={coverageFootprint} />
             <aside className="side-panel left-panel">
-              <TimeControls
-                currentTime={currentTime}
-                setCurrentTime={setCurrentTime}
-                isPlaying={isPlaying}
-                togglePlayback={togglePlayback}
-                speedMultiplier={speedMultiplier}
-                setSpeedMultiplier={setSpeedMultiplier}
-                resetToNow={resetToNow}
-              />
+              <TimeControls currentTime={currentTime} setCurrentTime={setCurrentTime} isPlaying={isPlaying} togglePlayback={togglePlayback} speedMultiplier={speedMultiplier} setSpeedMultiplier={setSpeedMultiplier} resetToNow={resetToNow} />
               <FiltersPanel filters={filters} onFiltersChange={setFilters} filterOptions={filterOptions} positionsCount={satellitesFor3D.length} />
+              <SatellitePickerPanel satellites={satellitesFor3D} selectedSatelliteId={selectedSatelliteId} onSelectSatellite={setSelectedSatelliteId} />
             </aside>
-
             <aside className="side-panel right-panel">
               <SatelliteDetailsPanel satelliteCard={satelliteCard} selectedPoint={selectedPoint} loading={loadingState.card} error={errorState.card} />
-              <AnalysisPanel
-                currentTime={currentTime}
-                selectedPoint={selectedPoint}
-                selectedSatelliteId={selectedSatelliteId}
-                activeFilters={sanitizeFilters(filters)}
-                onRunPointAnalysis={runPointAnalysis}
-                onRunRegionAnalysis={runRegionAnalysis}
-                onRunCompareGroups={runGroupCompare}
-                onCreateSubscription={handleCreateSubscription}
-                subscriptions={subscriptions}
-                filterOptions={filterOptions}
-                results={{ point: pointAnalysisResult, region: regionAnalysisResult, compare: compareResult }}
-                loading={loadingState.analysis || loadingState.subscriptions}
-                error={errorState.analysis}
-              />
+              <AnalysisPanel currentTime={currentTime} selectedPoint={selectedPoint} selectedSatelliteId={selectedSatelliteId} activeFilters={sanitizeFilters(filters)} onRunPointAnalysis={runPointAnalysis} onRunRegionAnalysis={runRegionAnalysis} onRunCompareGroups={runGroupCompare} onCreateSubscription={handleCreateSubscription} subscriptions={subscriptions} filterOptions={filterOptions} results={{ point: pointAnalysisResult, region: regionAnalysisResult, compare: compareResult }} loading={loadingState.analysis || loadingState.subscriptions} error={errorState.analysis} />
             </aside>
-
             <div className="floating-note bottom-note">
               <div>
-                <strong>3D overlays</strong>
-                <p>Orange line — track, green — visibility, violet — coverage. Click Earth to select a point.</p>
+                <strong>3D-режим</strong>
+                <p>Оранжевая линия — трек, зелёная — радиовидимость, фиолетовая — покрытие. Точка на Земле ставится только левым кликом.</p>
               </div>
-              {loadingState.positions ? <span className="status-pill">Updating positions…</span> : null}
+              {loadingState.positions ? <span className="status-pill">Обновляем позиции…</span> : null}
             </div>
-
             {errorState.positions ? <div className="floating-error">{errorState.positions}</div> : null}
             {hasNo3DData ? (
               <div className="empty-state-overlay">
-                <h2>No satellites returned for the current filter set</h2>
-                <p>Reset filters or check that the backend is running and seeded with TLE-backed data.</p>
+                <h2>По текущим фильтрам спутники не найдены</h2>
+                <p>Сбросьте фильтры или проверьте, что backend запущен и в нём есть загруженные TLE-данные.</p>
               </div>
             ) : null}
           </div>
