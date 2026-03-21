@@ -82,7 +82,7 @@ textarea { resize: vertical; }
 .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 14px; }
 .detail-row { padding: 10px 12px; border-radius: 12px; background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(148, 163, 184, 0.1); }
 .detail-row span, .result-item p, .muted-text { color: var(--muted); }
-.detail-row strong { display: block; margin-top: 6px; color: #f8fafc; }
+.detail-row strong { display: block; margin-top: 6px; color: #f8fafc; overflow-wrap: anywhere; word-break: break-word; }
 .info-card, .stack-card, .result-box { border-radius: 14px; padding: 14px; background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(148, 163, 184, 0.1); }
 .stack-card { display: grid; gap: 12px; margin-top: 14px; }
 .compact-card { margin-top: 12px; }

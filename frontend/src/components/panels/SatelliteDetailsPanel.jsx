@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatCoordinate } from '../../utils/coordinates';
+import { formatCompactNumber, formatCoordinate } from '../../utils/coordinates';
 import { formatTimestamp } from '../../utils/time';
 
 function DetailRow({ label, value }) {
@@ -59,8 +59,8 @@ export default function SatelliteDetailsPanel({
             <DetailRow label="Оператор" value={satelliteCard.operator} />
             <DetailRow label="Орбита" value={satelliteCard.orbit_type} />
             <DetailRow label="Назначение" value={satelliteCard.purpose} />
-            <DetailRow label="Высота" value={satelliteCard.approx_altitude_km ? `${satelliteCard.approx_altitude_km} км` : '—'} />
-            <DetailRow label="Период" value={satelliteCard.period_minutes ? `${satelliteCard.period_minutes} мин` : '—'} />
+            <DetailRow label="Высота" value={Number.isFinite(satelliteCard.approx_altitude_km) ? `${formatCompactNumber(satelliteCard.approx_altitude_km, 1)} км` : '—'} />
+            <DetailRow label="Период" value={Number.isFinite(satelliteCard.period_minutes) ? `${formatCompactNumber(satelliteCard.period_minutes, 1)} мин` : '—'} />
             <DetailRow label="Скорость" value={`${formatCoordinate(position?.velocity?.speed_km_s)} км/с`} />
             <DetailRow label="Эпоха TLE" value={satelliteCard.latest_tle_epoch ? formatTimestamp(satelliteCard.latest_tle_epoch) : '—'} />
           </div>

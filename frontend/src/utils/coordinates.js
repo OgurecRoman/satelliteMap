@@ -21,7 +21,11 @@ export function latLonAltToVector3(lat, lon, altKm = 0, radius = EARTH_RADIUS_UN
 
 export function ecefToVector3(ecef) {
   if (!ecef) return null;
-  return new THREE.Vector3(ecef.x * EARTH_SCALE, ecef.y * EARTH_SCALE, ecef.z * EARTH_SCALE);
+  return new THREE.Vector3(
+    ecef.y * EARTH_SCALE,
+    ecef.z * EARTH_SCALE,
+    ecef.x * EARTH_SCALE
+  );
 }
 
 export function extrapolateEcef(position, currentTime) {
@@ -59,6 +63,9 @@ export function formatCoordinate(value) {
   return Number.isFinite(value) ? value.toFixed(2) : '—';
 }
 
+export function formatCompactNumber(value, fractionDigits = 1) {
+  return Number.isFinite(value) ? Number(value).toFixed(fractionDigits) : '—';
+}
 
 export function ecefToLatLonAlt(ecef) {
   if (!ecef) return null;
