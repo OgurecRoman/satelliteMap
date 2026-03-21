@@ -1,11 +1,11 @@
 import './App.css';
-import Earth3D from './components/Earth3D';
+import SatelliteTracker from './components/SatelliteTracker';
 
 function App() {
   return (
     <div className="App">
-      <h1>Interactive 3D Earth</h1>
-      <Earth3D />
+      <h1>Interactive 2D Earth</h1>
+      <SatelliteTracker />
     </div>
   );
 }
