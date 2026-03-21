@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Html, OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import {
@@ -178,53 +178,67 @@ function CountryBorders() {
 
 function SatelliteCloudFast({
   satellites,
-  currentTime,
+  timeRef,
   selectedSatelliteId,
   renderedPositionsRef,
   renderedIdsRef,
 }) {
   const geometryRef = useRef(null);
 
-  const { positions, colors, satelliteIds } = useMemo(() => {
-    const positionsArray = new Float32Array(satellites.length * 3);
-    const colorsArray = new Float32Array(satellites.length * 3);
-    const ids = new Array(satellites.length);
+  const satelliteIds = useMemo(() => satellites.map((s) => s.satellite_id), [satellites]);
+
+  useEffect(() => {
+    renderedIdsRef.current = satelliteIds;
+  }, [satelliteIds, renderedIdsRef]);
+
+  useFrame(() => {
+    if (!geometryRef.current) return;
+
+    let posAttr = geometryRef.current.attributes.position;
+    let colAttr = geometryRef.current.attributes.color;
+
+    if (!posAttr || posAttr.array.length !== satellites.length * 3) {
+      const pArr = new Float32Array(satellites.length * 3);
+      const cArr = new Float32Array(satellites.length * 3);
+      geometryRef.current.setAttribute('position', new THREE.BufferAttribute(pArr, 3));
+      geometryRef.current.setAttribute('color', new THREE.BufferAttribute(cArr, 3));
+      renderedPositionsRef.current = pArr;
+      posAttr = geometryRef.current.attributes.position;
+      colAttr = geometryRef.current.attributes.color;
+    }
+
+    const positionsArray = posAttr.array;
+    const colorsArray = colAttr.array;
     const defaultColor = new THREE.Color('#7dd3fc');
     const selectedColor = new THREE.Color('#f59e0b');
+    const currentMs = timeRef.current;
 
-    satellites.forEach((satellite, index) => {
-      const position = extrapolatePositionToVector3(satellite, currentTime);
-      ids[index] = satellite.satellite_id;
+    for (let index = 0; index < satellites.length; index += 1) {
+      const position = extrapolatePositionToVector3(satellites[index], currentMs);
       if (position) {
         positionsArray[index * 3] = position.x;
         positionsArray[index * 3 + 1] = position.y;
         positionsArray[index * 3 + 2] = position.z;
+      } else {
+        positionsArray[index * 3] = 0;
+        positionsArray[index * 3 + 1] = 0;
+        positionsArray[index * 3 + 2] = 0;
       }
-      const color = satellite.satellite_id === selectedSatelliteId ? selectedColor : defaultColor;
+      
+      const isSelected = satelliteIds[index] === selectedSatelliteId;
+      const color = isSelected ? selectedColor : defaultColor;
       colorsArray[index * 3] = color.r;
       colorsArray[index * 3 + 1] = color.g;
       colorsArray[index * 3 + 2] = color.b;
-    });
-
-    return { positions: positionsArray, colors: colorsArray, satelliteIds: ids };
-  }, [satellites, currentTime, selectedSatelliteId]);
-
-  useEffect(() => {
-    renderedPositionsRef.current = positions;
-    renderedIdsRef.current = satelliteIds;
-    if (geometryRef.current) {
-      geometryRef.current.attributes.position.needsUpdate = true;
-      geometryRef.current.attributes.color.needsUpdate = true;
-      geometryRef.current.computeBoundingSphere();
     }
-  }, [positions, colors, satelliteIds, renderedPositionsRef, renderedIdsRef]);
+
+    posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
+  });
 
   return (
     <points frustumCulled={false}>
-      <bufferGeometry ref={geometryRef}>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-      </bufferGeometry>
+      <bufferGeometry ref={geometryRef} />
       <pointsMaterial
         size={0.07}
         sizeAttenuation
@@ -239,48 +253,54 @@ function SatelliteCloudFast({
 
 function SatelliteCloudFancy({
   satellites,
-  currentTime,
+  timeRef,
   selectedSatelliteId,
   renderedPositionsRef,
   renderedIdsRef,
 }) {
   const instancedRef = useRef(null);
   const glowRef = useRef(null);
+  
   const tempMatrix = useMemo(() => new THREE.Matrix4(), []);
   const tempPosition = useMemo(() => new THREE.Vector3(), []);
   const tempScale = useMemo(() => new THREE.Vector3(), []);
   const tempQuaternion = useMemo(() => new THREE.Quaternion(), []);
 
-  const { positions, satelliteIds } = useMemo(() => {
-    const positionsArray = new Float32Array(satellites.length * 3);
-    const ids = new Array(satellites.length);
-    satellites.forEach((satellite, index) => {
-      const position = extrapolatePositionToVector3(satellite, currentTime);
-      ids[index] = satellite.satellite_id;
-      if (position) {
-        positionsArray[index * 3] = position.x;
-        positionsArray[index * 3 + 1] = position.y;
-        positionsArray[index * 3 + 2] = position.z;
-      }
-    });
-    return { positions: positionsArray, satelliteIds: ids };
-  }, [satellites, currentTime]);
+  const satelliteIds = useMemo(() => satellites.map((s) => s.satellite_id), [satellites]);
 
   useEffect(() => {
-    renderedPositionsRef.current = positions;
     renderedIdsRef.current = satelliteIds;
-  }, [positions, satelliteIds, renderedPositionsRef, renderedIdsRef]);
+  }, [satelliteIds, renderedIdsRef]);
 
-  useEffect(() => {
+  useFrame(() => {
     if (!instancedRef.current || !glowRef.current) return;
+
+    if (!renderedPositionsRef.current || renderedPositionsRef.current.length !== satellites.length * 3) {
+      renderedPositionsRef.current = new Float32Array(satellites.length * 3);
+    }
+    const positionsArray = renderedPositionsRef.current;
 
     const defaultColor = new THREE.Color('#c8f1ff');
     const selectedColor = new THREE.Color('#f59e0b');
     const glowDefault = new THREE.Color('#60a5fa');
     const glowSelected = new THREE.Color('#fbbf24');
 
-    for (let index = 0; index < satelliteIds.length; index += 1) {
-      tempPosition.set(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2]);
+    const currentMs = timeRef.current;
+
+    for (let index = 0; index < satellites.length; index += 1) {
+      const position = extrapolatePositionToVector3(satellites[index], currentMs);
+      if (position) {
+        positionsArray[index * 3] = position.x;
+        positionsArray[index * 3 + 1] = position.y;
+        positionsArray[index * 3 + 2] = position.z;
+        tempPosition.copy(position);
+      } else {
+        positionsArray[index * 3] = 0;
+        positionsArray[index * 3 + 1] = 0;
+        positionsArray[index * 3 + 2] = 0;
+        tempPosition.set(0, 0, 0);
+      }
+
       const isSelected = satelliteIds[index] === selectedSatelliteId;
 
       tempScale.setScalar(isSelected ? 1.8 : 1);
@@ -294,13 +314,14 @@ function SatelliteCloudFancy({
       glowRef.current.setColorAt(index, isSelected ? glowSelected : glowDefault);
     }
 
-    instancedRef.current.count = satelliteIds.length;
-    glowRef.current.count = satelliteIds.length;
+    instancedRef.current.count = satellites.length;
+    glowRef.current.count = satellites.length;
+    
     instancedRef.current.instanceMatrix.needsUpdate = true;
     glowRef.current.instanceMatrix.needsUpdate = true;
     if (instancedRef.current.instanceColor) instancedRef.current.instanceColor.needsUpdate = true;
     if (glowRef.current.instanceColor) glowRef.current.instanceColor.needsUpdate = true;
-  }, [positions, satelliteIds, selectedSatelliteId, tempMatrix, tempPosition, tempQuaternion, tempScale]);
+  });
 
   return (
     <group>
@@ -320,27 +341,34 @@ function SatelliteCloud(props) {
   return FANCY_RENDERING ? <SatelliteCloudFancy {...props} /> : <SatelliteCloudFast {...props} />;
 }
 
-function SelectedSatelliteMarker({ satellite, currentTime }) {
-  const position = useMemo(
-    () => (satellite ? extrapolatePositionToVector3(satellite, currentTime) : null),
-    [satellite, currentTime]
-  );
+function SelectedSatelliteMarker({ satellite, timeRef }) {
+  const meshRef = useRef(null);
+  const glowRef = useRef(null);
+  const groupRef = useRef(null);
 
-  if (!satellite || !position) return null;
+  useFrame(() => {
+    if (!satellite || !meshRef.current || !glowRef.current || !groupRef.current) return;
+    const position = extrapolatePositionToVector3(satellite, timeRef.current);
+    if (position) {
+      meshRef.current.position.copy(position);
+      glowRef.current.position.copy(position);
+      groupRef.current.position.copy(position).multiplyScalar(1.08);
+    }
+  });
 
-  const labelPosition = position.clone().multiplyScalar(1.08);
+  if (!satellite) return null;
 
   return (
     <group>
-      <mesh position={position}>
+      <mesh ref={meshRef}>
         <sphereGeometry args={[0.08, 16, 16]} />
         <meshBasicMaterial color="#f59e0b" />
       </mesh>
-      <mesh position={position} scale={2.2}>
+      <mesh ref={glowRef} scale={2.2}>
         <sphereGeometry args={[0.08, 16, 16]} />
         <meshBasicMaterial color="#f59e0b" transparent opacity={0.15} />
       </mesh>
-      <group position={labelPosition}>
+      <group ref={groupRef}>
         <Html distanceFactor={6}>
           <div className="globe-label emphasized">{satellite.meta?.name || satellite.satellite_name}</div>
         </Html>
@@ -412,9 +440,15 @@ function TrackLine({ track }) {
   );
 }
 
-function FootprintLine({ footprint, selectedSatellite, currentTime, altitudeOffsetKm = 2, color, kind }) {
-  const points = useMemo(() => {
-    const dynamicCenter = currentGeodeticFromPosition(selectedSatellite, currentTime);
+function FootprintLine({ footprint, selectedSatellite, timeRef, altitudeOffsetKm = 2, color, kind }) {
+  const geometryRef = useRef(null);
+
+  const hasData = Boolean(selectedSatellite || footprint?.polygon?.coordinates?.[0]?.length);
+
+  useFrame(() => {
+    if (!geometryRef.current || !hasData) return;
+
+    const dynamicCenter = currentGeodeticFromPosition(selectedSatellite, timeRef.current);
     const angularRadiusDeg = Number.isFinite(footprint?.angular_radius_deg)
       ? footprint.angular_radius_deg
       : dynamicCenter
@@ -425,22 +459,36 @@ function FootprintLine({ footprint, selectedSatellite, currentTime, altitudeOffs
       ? sphericalCirclePolygon(dynamicCenter.lat, dynamicCenter.lon, angularRadiusDeg, 96)
       : footprint?.polygon?.coordinates?.[0];
 
-    if (!coordinates?.length) return null;
-    const vertices = [];
-    coordinates.forEach(([lon, lat]) => {
-      const vector = latLonAltToVector3(lat, lon, altitudeOffsetKm);
-      vertices.push(vector.x, vector.y, vector.z);
-    });
-    return new Float32Array(vertices);
-  }, [altitudeOffsetKm, currentTime, footprint, kind, selectedSatellite]);
+    if (!coordinates?.length) {
+      geometryRef.current.setDrawRange(0, 0);
+      return;
+    }
 
-  if (!points) return null;
+    let posAttr = geometryRef.current.attributes.position;
+    if (!posAttr || posAttr.array.length !== coordinates.length * 3) {
+      const arr = new Float32Array(coordinates.length * 3);
+      geometryRef.current.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      posAttr = geometryRef.current.attributes.position;
+    }
+
+    const positions = posAttr.array;
+    for (let i = 0; i < coordinates.length; i += 1) {
+      const [lon, lat] = coordinates[i];
+      const vector = latLonAltToVector3(lat, lon, altitudeOffsetKm);
+      positions[i * 3] = vector.x;
+      positions[i * 3 + 1] = vector.y;
+      positions[i * 3 + 2] = vector.z;
+    }
+
+    geometryRef.current.setDrawRange(0, coordinates.length);
+    posAttr.needsUpdate = true;
+  });
+
+  if (!hasData) return null;
 
   return (
     <lineLoop>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[points, 3]} />
-      </bufferGeometry>
+      <bufferGeometry ref={geometryRef} />
       <lineBasicMaterial color={color} />
     </lineLoop>
   );
@@ -576,6 +624,8 @@ function InteractionController({ renderedPositionsRef, renderedIdsRef, onSelectS
 function SceneContent({
   satellites,
   currentTime,
+  isPlaying,
+  speedMultiplier,
   selectedSatellite,
   selectedSatelliteId,
   onSelectSatellite,
@@ -587,6 +637,20 @@ function SceneContent({
 }) {
   const renderedPositionsRef = useRef(new Float32Array(0));
   const renderedIdsRef = useRef([]);
+
+  const timeRef = useRef(currentTime.getTime());
+
+  useEffect(() => {
+    if (!isPlaying || Math.abs(currentTime.getTime() - timeRef.current) > 1000) {
+      timeRef.current = currentTime.getTime();
+    }
+  }, [currentTime, isPlaying]);
+
+  useFrame((state, delta) => {
+    if (isPlaying) {
+      timeRef.current += delta * 1000 * speedMultiplier;
+    }
+  });
 
   return (
     <>
@@ -605,17 +669,17 @@ function SceneContent({
       <CountryBorders />
       <SatelliteCloud
         satellites={satellites}
-        currentTime={currentTime}
+        timeRef={timeRef}
         selectedSatelliteId={selectedSatelliteId}
         renderedPositionsRef={renderedPositionsRef}
         renderedIdsRef={renderedIdsRef}
       />
-      <SelectedSatelliteMarker satellite={selectedSatellite} currentTime={currentTime} />
+      <SelectedSatelliteMarker satellite={selectedSatellite} timeRef={timeRef} />
       <TrackLine track={track} />
       <FootprintLine
         footprint={visibilityFootprint}
         selectedSatellite={selectedSatellite}
-        currentTime={currentTime}
+        timeRef={timeRef}
         altitudeOffsetKm={3}
         color="#34d399"
         kind="visibility"
@@ -623,7 +687,7 @@ function SceneContent({
       <FootprintLine
         footprint={coverageFootprint}
         selectedSatellite={selectedSatellite}
-        currentTime={currentTime}
+        timeRef={timeRef}
         altitudeOffsetKm={5}
         color="#a855f7"
         kind="coverage"
@@ -637,6 +701,8 @@ function SceneContent({
 export default function Earth3D({
   satellites,
   currentTime,
+  isPlaying,
+  speedMultiplier,
   selectedSatellite,
   selectedSatelliteId,
   onSelectSatellite,
@@ -656,6 +722,8 @@ export default function Earth3D({
         <SceneContent
           satellites={satellites}
           currentTime={currentTime}
+          isPlaying={isPlaying}
+          speedMultiplier={speedMultiplier}
           selectedSatellite={selectedSatellite}
           selectedSatelliteId={selectedSatelliteId}
           onSelectSatellite={onSelectSatellite}

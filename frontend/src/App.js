@@ -291,6 +291,8 @@ function App() {
             <Earth3D
               satellites={satellitesFor3D}
               currentTime={currentTime}
+              isPlaying={isPlaying}
+              speedMultiplier={speedMultiplier}
               selectedSatellite={selectedSatelliteVisual}
               selectedSatelliteId={selectedSatelliteId}
               onSelectSatellite={setSelectedSatelliteId}
