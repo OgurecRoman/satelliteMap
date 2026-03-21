@@ -548,14 +548,25 @@ function InteractionController({ renderedPositionsRef, renderedIdsRef, onSelectS
 
     const handleContextMenu = (event) => event.preventDefault();
 
+    const handleKeyDown = (event) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (event.code === 'Space') {
+        event.preventDefault();
+        onSelectPoint(null);
+        onSelectSatellite(null);
+      }
+    };
+
     domElement.addEventListener('pointerdown', handlePointerDown);
     domElement.addEventListener('pointerup', handlePointerUp);
     domElement.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       domElement.removeEventListener('pointerdown', handlePointerDown);
       domElement.removeEventListener('pointerup', handlePointerUp);
       domElement.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [camera, gl, onSelectPoint, onSelectSatellite, renderedIdsRef, renderedPositionsRef, size]);
 

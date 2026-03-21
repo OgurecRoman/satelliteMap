@@ -3,8 +3,8 @@ import { formatCoordinate } from '../../utils/coordinates';
 import { formatTimestamp } from '../../utils/time';
 
 const DEFAULT_REGION = { min_lat: 50, min_lon: 30, max_lat: 60, max_lon: 40 };
-const DEFAULT_GROUP_A = { name: 'Группа A', country: '', operator: '', orbit_type: 'LEO', purpose: '' };
-const DEFAULT_GROUP_B = { name: 'Группа B', country: '', operator: '', orbit_type: '', purpose: 'Earth observation' };
+const DEFAULT_GROUP_A = { name: 'Группа A', country: '', operator: '', orbit_type: '', purpose: '' };
+const DEFAULT_GROUP_B = { name: 'Группа B', country: '', operator: '', orbit_type: '', purpose: '' };
 
 export default function AnalysisPanel({
   currentTime,
