@@ -56,6 +56,7 @@ def satellite_positions(
     operator: str | None = None,
     orbit_type: str | None = None,
     purpose: str | None = None,
+    search: str | None = None,
     format: PositionFormat = Query(default=PositionFormat.geodetic),
     db: Session = Depends(get_db),
 ):
@@ -66,7 +67,7 @@ def satellite_positions(
         operator=operator,
         orbit_type=orbit_type,
         purpose=purpose,
-        search=None,
+        search=search,
     )
     if format == PositionFormat.geodetic:
         for item in items:

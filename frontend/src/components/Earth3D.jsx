@@ -4,8 +4,11 @@ import { Html, OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import {
   EARTH_RADIUS_UNITS,
+  currentGeodeticFromPosition,
   extrapolatePositionToVector3,
+  footprintAngularRadiusDeg,
   latLonAltToVector3,
+  sphericalCirclePolygon,
   vector3ToLatLon,
 } from '../utils/coordinates';
 import worldData from '../assets/world-lowres.json';
@@ -345,17 +348,27 @@ function TrackLine({ track }) {
   );
 }
 
-function FootprintLine({ footprint, altitude = 20, color }) {
-  const coordinates = footprint?.polygon?.coordinates?.[0];
+function FootprintLine({ footprint, selectedSatellite, currentTime, altitudeOffsetKm = 2, color, kind }) {
   const points = useMemo(() => {
+    const dynamicCenter = currentGeodeticFromPosition(selectedSatellite, currentTime);
+    const angularRadiusDeg = Number.isFinite(footprint?.angular_radius_deg)
+      ? footprint.angular_radius_deg
+      : dynamicCenter
+        ? footprintAngularRadiusDeg(dynamicCenter.alt_km, kind)
+        : null;
+
+    const coordinates = dynamicCenter && angularRadiusDeg != null
+      ? sphericalCirclePolygon(dynamicCenter.lat, dynamicCenter.lon, angularRadiusDeg, 96)
+      : footprint?.polygon?.coordinates?.[0];
+
     if (!coordinates?.length) return null;
     const vertices = [];
     coordinates.forEach(([lon, lat]) => {
-      const vector = latLonAltToVector3(lat, lon, altitude);
+      const vector = latLonAltToVector3(lat, lon, altitudeOffsetKm);
       vertices.push(vector.x, vector.y, vector.z);
     });
     return new Float32Array(vertices);
-  }, [altitude, coordinates]);
+  }, [altitudeOffsetKm, currentTime, footprint, kind, selectedSatellite]);
 
   if (!points) return null;
 
@@ -524,8 +537,22 @@ function SceneContent({
       />
       <SelectedSatelliteMarker satellite={selectedSatellite} currentTime={currentTime} />
       <TrackLine track={track} />
-      <FootprintLine footprint={visibilityFootprint} altitude={12} color="#34d399" />
-      <FootprintLine footprint={coverageFootprint} altitude={16} color="#a855f7" />
+      <FootprintLine
+        footprint={visibilityFootprint}
+        selectedSatellite={selectedSatellite}
+        currentTime={currentTime}
+        altitudeOffsetKm={3}
+        color="#34d399"
+        kind="visibility"
+      />
+      <FootprintLine
+        footprint={coverageFootprint}
+        selectedSatellite={selectedSatellite}
+        currentTime={currentTime}
+        altitudeOffsetKm={5}
+        color="#a855f7"
+        kind="coverage"
+      />
 
       <OrbitControls enablePan enableZoom enableRotate minDistance={3.2} maxDistance={14} />
     </>

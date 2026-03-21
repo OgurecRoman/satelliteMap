@@ -13,6 +13,13 @@ export default function SatellitePickerPanel({ satellites, selectedSatelliteId, 
 
     if (!normalizedQuery) return source.slice(0, MAX_VISIBLE_RESULTS);
 
+    const exactMatches = source.filter((item) => {
+      const name = String(item.satellite_name || '').trim().toLowerCase();
+      const norad = String(item.satellite_id || '').trim().toLowerCase();
+      return name === normalizedQuery || norad === normalizedQuery;
+    });
+    if (exactMatches.length) return exactMatches.slice(0, MAX_VISIBLE_RESULTS);
+
     return source
       .filter((item) => {
         const label = `${item.satellite_name} ${item.satellite_id}`.toLowerCase();

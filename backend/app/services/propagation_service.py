@@ -31,7 +31,7 @@ class PropagationService:
         return Satrec.twoline2rv(line1, line2)
 
     @classmethod
-    def propagate(cls, line1: str, line2: str, timestamp: datetime) -> dict:
+    def _build_state(cls, line1: str, line2: str, timestamp: datetime) -> dict:
         timestamp = ensure_utc(timestamp)
         sat = cls._satrec(line1, line2)
         jd, fr = jday(
@@ -70,6 +70,21 @@ class PropagationService:
                 speed_km_s=vector_norm(velocity_ecef),
             ),
         }
+
+    @classmethod
+    @lru_cache(maxsize=25000)
+    def _build_state_for_whole_second(cls, line1: str, line2: str, unix_second: int) -> dict:
+        timestamp = datetime.fromtimestamp(unix_second, tz=timezone.utc)
+        return cls._build_state(line1, line2, timestamp)
+
+    @classmethod
+    def propagate(cls, line1: str, line2: str, timestamp: datetime) -> dict:
+        return cls._build_state(line1, line2, timestamp)
+
+    @classmethod
+    def propagate_bulk(cls, line1: str, line2: str, timestamp: datetime) -> dict:
+        normalized = ensure_utc(timestamp).replace(microsecond=0)
+        return cls._build_state_for_whole_second(line1, line2, int(normalized.timestamp()))
 
     @staticmethod
     def tle_epoch(line1: str, line2: str) -> datetime:

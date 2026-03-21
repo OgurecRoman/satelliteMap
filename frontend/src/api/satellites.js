@@ -20,7 +20,7 @@ export async function getSatellites(params = {}) {
 
 export async function getSatellitePositions(params = {}) {
   const { data } = await apiClient.get('/satellites/positions', {
-    params: cleanParams({ format: 'geodetic', ...params }),
+    params: cleanParams({ format: 'ecef', ...params }),
     timeout: 60000,
   });
   return data;

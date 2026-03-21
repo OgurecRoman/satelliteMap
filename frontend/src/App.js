@@ -21,7 +21,7 @@ import { createSubscription, listSubscriptions } from './api/notifications';
 
 const INITIAL_FILTERS = { country: '', operator: '', orbit_type: '', purpose: '', search: '' };
 const POSITION_REFRESH_SIM_MS = 90 * 1000;
-const CARD_REFRESH_SIM_MS = 60 * 1000;
+const CARD_REFRESH_SIM_MS = 20 * 1000;
 const SCRUB_REFRESH_DEBOUNCE_MS = 350;
 
 function sanitizeFilters(filters) {
@@ -56,6 +56,11 @@ function App() {
   const cardRequestIdRef = useRef(0);
 
   const { currentTime, setCurrentTime, isPlaying, togglePlayback, speedMultiplier, setSpeedMultiplier, resetToNow } = useSimulationClock();
+  const currentTimeRef = useRef(currentTime);
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
 
   useEffect(() => {
     let ignore = false;
@@ -89,8 +94,8 @@ function App() {
   useEffect(() => {
     if (activeView !== '3d') return;
     setLastPositionsFetchTime(null);
-    loadPositions(currentTime);
-  }, [activeView, currentTime, filters, loadPositions]);
+    loadPositions(currentTimeRef.current);
+  }, [activeView, filters, loadPositions]);
 
   useEffect(() => {
     if (activeView !== '3d') return undefined;
@@ -168,8 +173,9 @@ function App() {
       return;
     }
 
-    loadSelectedSatelliteData(currentTime);
-  }, [activeView, currentTime, selectedSatelliteId, selectedPoint, loadSelectedSatelliteData]);
+    setLastCardFetchTime(null);
+    loadSelectedSatelliteData(currentTimeRef.current);
+  }, [activeView, selectedSatelliteId, selectedPoint, loadSelectedSatelliteData]);
 
   useEffect(() => {
     if (activeView !== '3d' || !selectedSatelliteId || !lastCardFetchTime) return undefined;

@@ -90,21 +90,22 @@ class SatelliteService:
         )
 
     def get_positions(self, timestamp: datetime | None, **filters) -> list[SatellitePositionResponse]:
-        satellites = self.repo.list_all_filtered(**filters)
-        result = []
-        for satellite in satellites:
-            if not satellite.latest_tle:
-                continue
-            state = PropagationService.propagate(satellite.latest_tle.line1, satellite.latest_tle.line2, ensure_utc(timestamp))
-            result.append(
+        timestamp_utc = ensure_utc(timestamp)
+        rows = self.repo.list_position_rows_filtered(**filters)
+        result: list[SatellitePositionResponse] = []
+        append = result.append
+        for satellite_id, satellite_name, line1, line2 in rows:
+            state = PropagationService.propagate_bulk(line1, line2, timestamp_utc)
+            append(
                 SatellitePositionResponse(
-                    satellite_id=satellite.id,
-                    satellite_name=satellite.name,
+                    satellite_id=satellite_id,
+                    satellite_name=satellite_name,
                     timestamp=state["timestamp"],
                     geodetic=state["geodetic"],
                     ecef=state["ecef"],
                     eci=state["eci"],
                     velocity=state["velocity_eci"],
+                    velocity_ecef=state["velocity_ecef"],
                 )
             )
         return result
@@ -208,7 +209,7 @@ class SatelliteService:
         current_window = None
         windows: list[PassWindow] = []
         for state in states:
-            geodetic = state["geodetic" ]
+            geodetic = state["geodetic"]
             visible, distance_km = PropagationService.is_point_visible_from_subpoint(
                 geodetic.lat,
                 geodetic.lon,
