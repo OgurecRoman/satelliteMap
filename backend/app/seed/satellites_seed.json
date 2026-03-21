@@ -1,0 +1,56 @@
+[
+  {
+    "name": "ISS (ZARYA)",
+    "country": "International",
+    "operator": "NASA / Roscosmos",
+    "purpose": "Human spaceflight",
+    "source": "seed",
+    "line1": "1 25544U 98067A   24153.51782528  .00016717  00000+0  30134-3 0  9995",
+    "line2": "2 25544  51.6393  72.8097 0004370 286.7535 160.6846 15.50099017454546"
+  },
+  {
+    "name": "HST",
+    "country": "USA",
+    "operator": "NASA",
+    "purpose": "Space telescope",
+    "source": "seed",
+    "line1": "1 20580U 90037B   24153.15454765  .00000885  00000+0  44492-4 0  9991",
+    "line2": "2 20580  28.4696 301.1129 0002665  57.6812 302.4460 15.23556313740556"
+  },
+  {
+    "name": "NOAA 19",
+    "country": "USA",
+    "operator": "NOAA",
+    "purpose": "Earth observation",
+    "source": "seed",
+    "line1": "1 33591U 09005A   24152.83828359  .00000098  00000+0  81128-4 0  9994",
+    "line2": "2 33591  99.1940 207.4055 0014186 189.8232 170.2583 14.12417127786104"
+  },
+  {
+    "name": "SENTINEL-2A",
+    "country": "EU",
+    "operator": "ESA",
+    "purpose": "Earth observation",
+    "source": "seed",
+    "line1": "1 40697U 15028A   24153.85721711  .00000055  00000+0  25159-4 0  9991",
+    "line2": "2 40697  98.5716 232.6338 0001172  91.2232 268.9067 14.30815759467405"
+  },
+  {
+    "name": "GPS BIIR-2  (PRN 13)",
+    "country": "USA",
+    "operator": "USSF",
+    "purpose": "Navigation",
+    "source": "seed",
+    "line1": "1 24876U 97035A   24153.22965063 -.00000024  00000+0  00000+0 0  9999",
+    "line2": "2 24876  54.9751 326.9330 0110948  55.1900 305.9162  2.00564173195996"
+  },
+  {
+    "name": "GOES 16",
+    "country": "USA",
+    "operator": "NOAA",
+    "purpose": "Weather",
+    "source": "seed",
+    "line1": "1 41866U 16071A   24153.14562372 -.00000157  00000+0  00000+0 0  9997",
+    "line2": "2 41866   0.0514  74.2323 0001414 191.7168  37.4270  1.00270637 27694"
+  }
+]

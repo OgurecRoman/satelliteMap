@@ -1,6 +1,50 @@
-/.env
+# Environment
 .env
-./.env
-./.idea
-.idea
-/.idea
+.env.*
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+.mypy_cache/
+.pytest_cache/
+.coverage*
+coverage.xml
+htmlcov/
+
+# Local databases / logs
+*.db
+log.txt
+
+# Build / generated
+build/
+dist/
+site/
+docs_build/
+site_build/
+*.zip
+
+# IDE / editors
+.idea/
+.vscode/
+*~
+.*.sw?
+
+# OS / misc
+.DS_Store
+.cache/
+.codspeed/
+
+# Dependency / frontend leftovers
+node_modules/
+.pnp
+.pnp.js
+.next/
+
+# Packaging / lockfiles
+Pipfile.lock
