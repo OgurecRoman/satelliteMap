@@ -285,10 +285,6 @@ function App() {
         {activeView === '2d' ? (
           <div className="view-layer view-layer-2d">
             <SatelliteTracker />
-            <div className="floating-note left-note">
-              <strong>2D-режим сохранён</strong>
-              <p>Существующая Leaflet-реализация не переписывалась. Добавлены только общая оболочка приложения и переключатель режимов.</p>
-            </div>
           </div>
         ) : (
           <div className="view-layer view-layer-3d">
