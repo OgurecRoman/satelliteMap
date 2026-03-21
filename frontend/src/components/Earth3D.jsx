@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import {
   EARTH_RADIUS_UNITS,
   currentGeodeticFromPosition,
+  ecefToVector3,
   extrapolatePositionToVector3,
   footprintAngularRadiusDeg,
   latLonAltToVector3,
@@ -107,25 +108,6 @@ function createEarthTexture() {
   return texture;
 }
 
-function createFancyPointTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  const gradient = ctx.createRadialGradient(64, 64, 6, 64, 64, 64);
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.18, 'rgba(255,255,255,0.95)');
-  gradient.addColorStop(0.36, 'rgba(125,211,252,0.92)');
-  gradient.addColorStop(0.72, 'rgba(59,130,246,0.32)');
-  gradient.addColorStop(1, 'rgba(59,130,246,0)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 128, 128);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.needsUpdate = true;
-  return texture;
-}
-
 function Earth({ selectedPoint }) {
   const earthTexture = useMemo(() => createEarthTexture(), []);
 
@@ -194,22 +176,20 @@ function CountryBorders() {
   );
 }
 
-function SatelliteCloud({
+function SatelliteCloudFast({
   satellites,
   currentTime,
   selectedSatelliteId,
   renderedPositionsRef,
   renderedIdsRef,
 }) {
-  const fancyTexture = useMemo(() => (FANCY_RENDERING ? createFancyPointTexture() : null), []);
   const geometryRef = useRef(null);
-  const materialRef = useRef(null);
 
   const { positions, colors, satelliteIds } = useMemo(() => {
     const positionsArray = new Float32Array(satellites.length * 3);
     const colorsArray = new Float32Array(satellites.length * 3);
     const ids = new Array(satellites.length);
-    const defaultColor = new THREE.Color(FANCY_RENDERING ? '#b9e9ff' : '#7dd3fc');
+    const defaultColor = new THREE.Color('#7dd3fc');
     const selectedColor = new THREE.Color('#f59e0b');
 
     satellites.forEach((satellite, index) => {
@@ -239,10 +219,6 @@ function SatelliteCloud({
     }
   }, [positions, colors, satelliteIds, renderedPositionsRef, renderedIdsRef]);
 
-  useEffect(() => () => {
-    if (fancyTexture) fancyTexture.dispose();
-  }, [fancyTexture]);
-
   return (
     <points frustumCulled={false}>
       <bufferGeometry ref={geometryRef}>
@@ -250,20 +226,98 @@ function SatelliteCloud({
         <bufferAttribute attach="attributes-color" args={[colors, 3]} />
       </bufferGeometry>
       <pointsMaterial
-        ref={materialRef}
-        size={FANCY_RENDERING ? 0.12 : 0.07}
+        size={0.07}
         sizeAttenuation
         vertexColors
         transparent
-        opacity={FANCY_RENDERING ? 1 : 0.96}
+        opacity={0.96}
         depthWrite={false}
-        map={fancyTexture || undefined}
-        alphaMap={fancyTexture || undefined}
-        alphaTest={FANCY_RENDERING ? 0.02 : 0}
-        blending={FANCY_RENDERING ? THREE.AdditiveBlending : THREE.NormalBlending}
       />
     </points>
   );
+}
+
+function SatelliteCloudFancy({
+  satellites,
+  currentTime,
+  selectedSatelliteId,
+  renderedPositionsRef,
+  renderedIdsRef,
+}) {
+  const instancedRef = useRef(null);
+  const glowRef = useRef(null);
+  const tempMatrix = useMemo(() => new THREE.Matrix4(), []);
+  const tempPosition = useMemo(() => new THREE.Vector3(), []);
+  const tempScale = useMemo(() => new THREE.Vector3(), []);
+  const tempQuaternion = useMemo(() => new THREE.Quaternion(), []);
+
+  const { positions, satelliteIds } = useMemo(() => {
+    const positionsArray = new Float32Array(satellites.length * 3);
+    const ids = new Array(satellites.length);
+    satellites.forEach((satellite, index) => {
+      const position = extrapolatePositionToVector3(satellite, currentTime);
+      ids[index] = satellite.satellite_id;
+      if (position) {
+        positionsArray[index * 3] = position.x;
+        positionsArray[index * 3 + 1] = position.y;
+        positionsArray[index * 3 + 2] = position.z;
+      }
+    });
+    return { positions: positionsArray, satelliteIds: ids };
+  }, [satellites, currentTime]);
+
+  useEffect(() => {
+    renderedPositionsRef.current = positions;
+    renderedIdsRef.current = satelliteIds;
+  }, [positions, satelliteIds, renderedPositionsRef, renderedIdsRef]);
+
+  useEffect(() => {
+    if (!instancedRef.current || !glowRef.current) return;
+
+    const defaultColor = new THREE.Color('#c8f1ff');
+    const selectedColor = new THREE.Color('#f59e0b');
+    const glowDefault = new THREE.Color('#60a5fa');
+    const glowSelected = new THREE.Color('#fbbf24');
+
+    for (let index = 0; index < satelliteIds.length; index += 1) {
+      tempPosition.set(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2]);
+      const isSelected = satelliteIds[index] === selectedSatelliteId;
+
+      tempScale.setScalar(isSelected ? 1.8 : 1);
+      tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+      instancedRef.current.setMatrixAt(index, tempMatrix);
+      instancedRef.current.setColorAt(index, isSelected ? selectedColor : defaultColor);
+
+      tempScale.setScalar(isSelected ? 2.6 : 1.45);
+      tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+      glowRef.current.setMatrixAt(index, tempMatrix);
+      glowRef.current.setColorAt(index, isSelected ? glowSelected : glowDefault);
+    }
+
+    instancedRef.current.count = satelliteIds.length;
+    glowRef.current.count = satelliteIds.length;
+    instancedRef.current.instanceMatrix.needsUpdate = true;
+    glowRef.current.instanceMatrix.needsUpdate = true;
+    if (instancedRef.current.instanceColor) instancedRef.current.instanceColor.needsUpdate = true;
+    if (glowRef.current.instanceColor) glowRef.current.instanceColor.needsUpdate = true;
+  }, [positions, satelliteIds, selectedSatelliteId, tempMatrix, tempPosition, tempQuaternion, tempScale]);
+
+  return (
+    <group>
+      <instancedMesh ref={glowRef} args={[null, null, Math.max(satellites.length, 1)]} frustumCulled={false}>
+        <sphereGeometry args={[0.035, 7, 7]} />
+        <meshBasicMaterial transparent opacity={0.22} depthWrite={false} />
+      </instancedMesh>
+      <instancedMesh ref={instancedRef} args={[null, null, Math.max(satellites.length, 1)]} frustumCulled={false}>
+        <sphereGeometry args={[0.024, 10, 10]} />
+        <meshStandardMaterial emissive="#5ab5ff" emissiveIntensity={0.55} roughness={0.32} metalness={0.08} />
+      </instancedMesh>
+    </group>
+  );
+}
+
+function SatelliteCloud(props) {
+  return FANCY_RENDERING ? <SatelliteCloudFancy {...props} /> : <SatelliteCloudFast {...props} />;
 }
 
 function SelectedSatelliteMarker({ satellite, currentTime }) {
@@ -303,8 +357,13 @@ function buildTrackSegments(track) {
   let previousPoint = null;
 
   track.points.forEach((point) => {
-    if (!point?.geodetic) return;
-    const vector = latLonAltToVector3(point.geodetic.lat, point.geodetic.lon, point.geodetic.alt_km);
+    const vector = point?.ecef
+      ? ecefToVector3(point.ecef)
+      : point?.geodetic
+        ? latLonAltToVector3(point.geodetic.lat, point.geodetic.lon, point.geodetic.alt_km)
+        : null;
+    if (!vector) return;
+
     const current = [vector.x, vector.y, vector.z];
 
     if (!previousPoint) {
@@ -313,10 +372,15 @@ function buildTrackSegments(track) {
       return;
     }
 
-    const lonDelta = Math.abs(point.geodetic.lon - previousPoint.geodetic.lon);
     const timeDeltaMs = Math.abs(new Date(point.timestamp).getTime() - new Date(previousPoint.timestamp).getTime());
+    const previousVector = previousPoint?.ecef
+      ? ecefToVector3(previousPoint.ecef)
+      : previousPoint?.geodetic
+        ? latLonAltToVector3(previousPoint.geodetic.lat, previousPoint.geodetic.lon, previousPoint.geodetic.alt_km)
+        : null;
+    const gapDistance = previousVector ? previousVector.distanceTo(vector) : 0;
 
-    if (lonDelta > 120 || timeDeltaMs > (track.step_seconds * 2000)) {
+    if (timeDeltaMs > (track.step_seconds * 2500) || gapDistance > 1.6) {
       if (currentSegment.length > 1) segments.push(currentSegment);
       currentSegment = [current];
     } else {

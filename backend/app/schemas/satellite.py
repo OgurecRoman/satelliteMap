@@ -114,6 +114,7 @@ class SatelliteCardResponse(SatelliteSummary):
 class GroundTrackPoint(BaseModel):
     timestamp: datetime
     geodetic: GeodeticCoordinates
+    ecef: CartesianCoordinates | None = None
 
 
 class GroundTrackResponse(BaseModel):

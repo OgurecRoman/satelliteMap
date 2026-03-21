@@ -141,7 +141,7 @@ function App() {
     try {
       const [cardData, trackData, visibilityData, coverageData] = await Promise.all([
         getSatelliteCard(selectedSatelliteId, { timestamp: timestamp.toISOString(), ...pointParams }),
-        getSatelliteTrack(selectedSatelliteId, { start_time: startTime.toISOString(), end_time: endTime.toISOString(), step_seconds: 120 }),
+        getSatelliteTrack(selectedSatelliteId, { start_time: startTime.toISOString(), end_time: endTime.toISOString(), step_seconds: 60 }),
         getSatelliteVisibility(selectedSatelliteId, { timestamp: timestamp.toISOString() }),
         getSatelliteCoverage(selectedSatelliteId, { timestamp: timestamp.toISOString() }),
       ]);

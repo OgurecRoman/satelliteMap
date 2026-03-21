@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { formatDateTimeLocalInput, formatTimestamp, parseDateTimeLocalInput } from '../../utils/time';
-const SPEED_OPTIONS = [1, 10, 60, 300];
+const SPEED_OPTIONS = [1, 10, 60];
 export default function TimeControls({ currentTime, setCurrentTime, isPlaying, togglePlayback, speedMultiplier, setSpeedMultiplier, resetToNow }) {
   const [inputValue, setInputValue] = useState(formatDateTimeLocalInput(currentTime));
   useEffect(() => { setInputValue(formatDateTimeLocalInput(currentTime)); }, [currentTime]);

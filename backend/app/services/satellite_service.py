@@ -154,7 +154,14 @@ class SatelliteService:
             start_time=ensure_utc(start_time),
             end_time=ensure_utc(end_time),
             step_seconds=step_seconds,
-            points=[GroundTrackPoint(timestamp=state["timestamp"], geodetic=state["geodetic"]) for state in states],
+            points=[
+                GroundTrackPoint(
+                    timestamp=state["timestamp"],
+                    geodetic=state["geodetic"],
+                    ecef=state["ecef"],
+                )
+                for state in states
+            ],
         )
 
     def get_footprint(self, satellite_id: int, timestamp: datetime | None, kind: str) -> AreaFootprintResponse:
