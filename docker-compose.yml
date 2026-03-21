@@ -33,7 +33,7 @@ services:
       dockerfile: Dockerfile
       args:
         REACT_APP_API_BASE_URL: /api/v1
-        FANCY: "false"
+        FANCY: "true"
     container_name: public_site_frontend
     restart: unless-stopped
     depends_on:
