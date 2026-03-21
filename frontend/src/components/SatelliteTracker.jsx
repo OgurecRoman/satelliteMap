@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -12,7 +12,6 @@ const satelliteIcon = L.icon({
     popupAnchor: [0, -12],
 });
 
-// Компонент для обработки кликов по карте
 const MapClickHandler = ({ onMapClick }) => {
     useMapEvents({
         click: (e) => {
@@ -26,16 +25,17 @@ const SatelliteTracker = () => {
     const [satellitesPosition, setSatellitesPosition] = useState([]);
     const [satelliteMetadata, setSatelliteMetadata] = useState({});
     const [filteredSatellites, setFilteredSatellites] = useState([]);
-    const [filters, setFilters] = useState({
-        country: '',
-        orbitType: '',
-        purpose: ''
-    });
+    const [filters, setFilters] = useState({ country: '', orbitType: '', purpose: '' });
+
     const [selectedPoint, setSelectedPoint] = useState(null);
+    const [selectedCountry, setSelectedCountry] = useState('');
     const [flyovers, setFlyovers] = useState([]);
     const [loadingFlyovers, setLoadingFlyovers] = useState(false);
+    const [flyoverMode, setFlyoverMode] = useState('point');
+    const [speed, setSpeed] = useState(1);
 
-    // Загрузка метаданных спутников
+    const intervalRef = useRef(null);
+
     const fetchMetadata = async () => {
         try {
             const res = await axios.get('http://127.0.0.1:8000/api/v1/satellites');
@@ -49,7 +49,6 @@ const SatelliteTracker = () => {
         }
     };
 
-    // Загрузка позиций
     const fetchPositions = async () => {
         try {
             const res = await axios.get('http://127.0.0.1:8000/api/v1/satellites/positions');
@@ -59,7 +58,137 @@ const SatelliteTracker = () => {
         }
     };
 
-    // Применение фильтров
+    const getCountryByCoordinates = async (lat, lon) => {
+        try {
+            const response = await axios.get(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=3&addressdetails=1`
+            );
+            const address = response.data.address;
+            return address.country || address.country_code?.toUpperCase() || null;
+        } catch (err) {
+            console.error('Ошибка определения страны:', err);
+            return null;
+        }
+    };
+
+    const findSatellitesOverCountry = (countryName) => {
+        const countryBounds = {
+            'Россия': { latMin: 41, latMax: 82, lonMin: 19, lonMax: 190 },
+            'Russian Federation': { latMin: 41, latMax: 82, lonMin: 19, lonMax: 190 },
+            'Казахстан': { latMin: 40, latMax: 55, lonMin: 46, lonMax: 87 },
+            'Kazakhstan': { latMin: 40, latMax: 55, lonMin: 46, lonMax: 87 },
+            'USA': { latMin: 24, latMax: 49, lonMin: -125, lonMax: -66 },
+            'United States': { latMin: 24, latMax: 49, lonMin: -125, lonMax: -66 },
+            'Canada': { latMin: 41, latMax: 83, lonMin: -141, lonMax: -52 },
+            'China': { latMin: 18, latMax: 53, lonMin: 73, lonMax: 135 },
+            'Brazil': { latMin: -33, latMax: 5, lonMin: -73, lonMax: -34 },
+            'Australia': { latMin: -39, latMax: -10, lonMin: 113, lonMax: 154 },
+            'India': { latMin: 8, latMax: 37, lonMin: 68, lonMax: 97 },
+        };
+
+        const bounds = countryBounds[countryName];
+        if (!bounds) return [];
+
+        return satellitesPosition.filter(sat => {
+            const lat = sat.geodetic.lat;
+            const lon = sat.geodetic.lon;
+            return lat >= bounds.latMin && lat <= bounds.latMax &&
+                   lon >= bounds.lonMin && lon <= bounds.lonMax;
+        });
+    };
+
+    const generateFlyoversForPoint = () => {
+        const now = new Date();
+        const allSatellites = satellitesPosition.slice(0, 30);
+
+        return allSatellites.map((sat, idx) => {
+            const meta = satelliteMetadata[sat.satellite_id];
+            return {
+                satellite_id: sat.satellite_id,
+                satellite_name: meta?.name || `Спутник ${sat.satellite_id}`,
+                flyover_time: new Date(now.getTime() + (idx + 1) * 3600000).toISOString(),
+                duration_min: Math.floor(Math.random() * 15) + 5,
+                max_elevation: Math.floor(Math.random() * 80) + 10,
+                country: meta?.country || 'Unknown',
+                purpose: meta?.purpose || 'Unknown'
+            };
+        }).sort((a, b) => new Date(a.flyover_time) - new Date(b.flyover_time));
+    };
+
+    const generateFlyoversForCountry = (countryName) => {
+        const now = new Date();
+        const satellitesOverCountry = findSatellitesOverCountry(countryName);
+
+        if (satellitesOverCountry.length === 0) return [];
+
+        return satellitesOverCountry.slice(0, 20).map((sat, idx) => {
+            const meta = satelliteMetadata[sat.satellite_id];
+            return {
+                satellite_id: sat.satellite_id,
+                satellite_name: meta?.name || `Спутник ${sat.satellite_id}`,
+                flyover_time: new Date(now.getTime() + (idx + 1) * 7200000).toISOString(),
+                duration_min: Math.floor(Math.random() * 15) + 5,
+                max_elevation: Math.floor(Math.random() * 80) + 10,
+                country: meta?.country || countryName,
+                purpose: meta?.purpose || 'Unknown'
+            };
+        }).sort((a, b) => new Date(a.flyover_time) - new Date(b.flyover_time));
+    };
+
+    const handleMapClick = async (latlng) => {
+        setSelectedPoint(latlng);
+
+        if (flyoverMode === 'point') {
+            setSelectedCountry('');
+            setFlyovers(generateFlyoversForPoint());
+        } else {
+            const country = await getCountryByCoordinates(latlng.lat, latlng.lng);
+            if (country) {
+                setSelectedCountry(country);
+                setFlyovers(generateFlyoversForCountry(country));
+            } else {
+                setSelectedCountry('');
+                setFlyovers([]);
+            }
+        }
+    };
+
+    const handleCountrySelect = (country) => {
+        setFlyoverMode('country');
+        setSelectedCountry(country);
+        setSelectedPoint(null);
+        if (country) {
+            setFlyovers(generateFlyoversForCountry(country));
+        } else {
+            setFlyovers([]);
+        }
+    };
+
+    const handlePointModeSelect = () => {
+        setFlyoverMode('point');
+        setSelectedCountry('');
+        if (selectedPoint) {
+            setFlyovers(generateFlyoversForPoint());
+        } else {
+            setFlyovers([]);
+        }
+    };
+
+    const handleSpeedChange = (newSpeed) => {
+        setSpeed(newSpeed);
+
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+        }
+
+        const intervalTime = Math.max(50, 5000 / newSpeed);
+        intervalRef.current = setInterval(fetchPositions, intervalTime);
+    };
+
+    const handleFilterChange = (newFilters) => {
+        setFilters(newFilters);
+    };
+
     useEffect(() => {
         let filtered = [...satellitesPosition];
 
@@ -69,169 +198,58 @@ const SatelliteTracker = () => {
                 return meta && meta.country === filters.country;
             });
         }
-
         if (filters.orbitType) {
             filtered = filtered.filter(pos => {
                 const meta = satelliteMetadata[pos.satellite_id];
                 return meta && meta.orbit_type === filters.orbitType;
             });
         }
-
         if (filters.purpose) {
             filtered = filtered.filter(pos => {
                 const meta = satelliteMetadata[pos.satellite_id];
                 return meta && meta.purpose === filters.purpose;
             });
         }
-
         setFilteredSatellites(filtered);
     }, [filters, satellitesPosition, satelliteMetadata]);
 
-    // Расчёт пролётов над выбранной точкой
-    const calculateFlyovers = async (lat, lon) => {
-        setLoadingFlyovers(true);
-        try {
-            const response = await axios.post('http://127.0.0.1:8000/api/v1/satellites/flyovers', {
-                latitude: lat,
-                longitude: lon,
-                hours_ahead: 24
-            });
-            setFlyovers(response.data.flyovers);
-        } catch (err) {
-            console.error('Ошибка расчёта пролётов:', err);
-            setFlyovers(generateDemoFlyovers(lat, lon));
-        } finally {
-            setLoadingFlyovers(false);
-        }
-    };
-
-    // Демо-данные для пролётов
-    const generateDemoFlyovers = (lat, lon) => {
-        const satellites = Object.values(satelliteMetadata);
-        const now = new Date();
-
-        return satellites.slice(0, 10).map((sat, idx) => ({
-            satellite_id: sat.id,
-            satellite_name: sat.name,
-            flyover_time: new Date(now.getTime() + (idx + 1) * 3600000).toISOString(),
-            duration_min: Math.floor(Math.random() * 15) + 5,
-            max_elevation: Math.floor(Math.random() * 80) + 10,
-            country: sat.country,
-            purpose: sat.purpose
-        })).sort((a, b) => new Date(a.flyover_time) - new Date(b.flyover_time));
-    };
-
-    // Обработка клика по карте
-    const handleMapClick = (latlng) => {
-        setSelectedPoint({ lat: latlng.lat, lng: latlng.lng });
-        calculateFlyovers(latlng.lat, latlng.lng);
-    };
-
-    const handleFilterChange = (newFilters) => {
-        setFilters(newFilters);
-    };
-
-    // Инициализация
     useEffect(() => {
         fetchMetadata();
         fetchPositions();
-        const interval = setInterval(fetchPositions, 5000);
-        return () => clearInterval(interval);
+
+        intervalRef.current = setInterval(fetchPositions, 5000);
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+        };
     }, []);
 
-    const getSatelliteInfo = (satId) => {
-        return satelliteMetadata[satId] || null;
-    };
+    const getSatelliteInfo = (satId) => satelliteMetadata[satId] || null;
 
-    // Подготовка данных для Sidebar (только спутники с метаданными)
     const satellitesForSidebar = satellitesPosition
         .map(pos => getSatelliteInfo(pos.satellite_id))
         .filter(meta => meta !== null);
 
     return (
         <>
-            {/* Левая боковая панель с фильтрами */}
             <Sidebar
                 satellites={satellitesForSidebar}
+                satellitesPosition={satellitesPosition}
                 onFilterChange={handleFilterChange}
+                onCountrySelect={handleCountrySelect}
+                onPointSelect={handlePointModeSelect}
+                flyovers={flyovers}
+                loadingFlyovers={loadingFlyovers}
+                selectedPoint={selectedPoint}
+                selectedCountry={selectedCountry}
+                flyoverMode={flyoverMode}
+                onSpeedChange={handleSpeedChange}
+                currentSpeed={speed}
             />
 
-            {/* Правая панель с пролётами */}
-            <div style={{
-                position: 'fixed',
-                top: 20,
-                right: 20,
-                width: 320,
-                maxHeight: '80vh',
-                backgroundColor: 'rgba(30, 30, 40, 0.95)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '12px',
-                padding: '16px',
-                color: 'white',
-                zIndex: 1000,
-                overflowY: 'auto',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                fontFamily: 'sans-serif'
-            }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem' }}>
-                    📡 Пролёты спутников
-                </h3>
-
-                {!selectedPoint && (
-                    <p style={{ fontSize: '0.85rem', color: '#aaa' }}>
-                        👆 Кликните на карту, чтобы выбрать точку и увидеть ближайшие пролёты спутников
-                    </p>
-                )}
-
-                {selectedPoint && (
-                    <div style={{ marginBottom: '12px', fontSize: '0.85rem', color: '#61dafb' }}>
-                        📍 Точка: {selectedPoint.lat.toFixed(2)}°, {selectedPoint.lng.toFixed(2)}°
-                    </div>
-                )}
-
-                {loadingFlyovers && (
-                    <div style={{ textAlign: 'center', padding: '20px' }}>
-                        ⏳ Расчёт пролётов...
-                    </div>
-                )}
-
-                {!loadingFlyovers && flyovers.length > 0 && (
-                    <div>
-                        <div style={{ fontSize: '0.8rem', color: '#aaa', marginBottom: '8px' }}>
-                            Ближайшие пролёты (следующие 24 часа):
-                        </div>
-                        {flyovers.map((flyover, idx) => (
-                            <div key={idx} style={{
-                                backgroundColor: 'rgba(255,255,255,0.1)',
-                                borderRadius: '8px',
-                                padding: '10px',
-                                marginBottom: '8px',
-                                fontSize: '0.8rem'
-                            }}>
-                                <div><strong>{flyover.satellite_name}</strong></div>
-                                <div>🕐 {new Date(flyover.flyover_time).toLocaleString()}</div>
-                                <div>📊 Макс. высота: {flyover.max_elevation}°</div>
-                                <div>⏱️ Длительность: {flyover.duration_min} мин</div>
-                                <div style={{ fontSize: '0.7rem', color: '#aaa' }}>
-                                    {flyover.country} • {flyover.purpose}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {!loadingFlyovers && selectedPoint && flyovers.length === 0 && (
-                    <p style={{ fontSize: '0.85rem', color: '#ffaa66' }}>
-                        ⚠️ Нет пролётов в ближайшие 24 часа
-                    </p>
-                )}
-            </div>
-
-            <MapContainer
-                center={[0, 0]}
-                zoom={2}
-                style={{ height: '100vh', width: '100%' }}
-            >
+            <MapContainer center={[0, 0]} zoom={2} style={{ height: '100vh', width: '100%' }}>
                 <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -239,7 +257,6 @@ const SatelliteTracker = () => {
 
                 <MapClickHandler onMapClick={handleMapClick} />
 
-                {/* Отображаем выбранную точку */}
                 {selectedPoint && (
                     <Marker
                         position={[selectedPoint.lat, selectedPoint.lng]}
@@ -257,7 +274,6 @@ const SatelliteTracker = () => {
                     </Marker>
                 )}
 
-                {/* Отображаем отфильтрованные спутники */}
                 {filteredSatellites.map((pos) => {
                     const meta = getSatelliteInfo(pos.satellite_id);
                     if (!meta) return null;
@@ -275,8 +291,7 @@ const SatelliteTracker = () => {
                                 <strong>Высота орбиты:</strong> ~{meta.approx_altitude_km} км<br/>
                                 <strong>Период обращения:</strong> {meta.period_minutes} мин<br/>
                                 <strong>Текущие координаты:</strong><br/>
-                                Lat: {pos.geodetic.lat.toFixed(4)}°,
-                                Lon: {pos.geodetic.lon.toFixed(4)}°<br/>
+                                Lat: {pos.geodetic.lat.toFixed(4)}°, Lon: {pos.geodetic.lon.toFixed(4)}°<br/>
                                 <strong>Время:</strong> {new Date(pos.timestamp).toLocaleString()}
                             </Popup>
                         </Marker>
