@@ -6,52 +6,87 @@ import axios from 'axios';
 
 const satelliteIcon = L.icon({
     iconUrl: '/satelite.png',
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
     popupAnchor: [0, -12],
 });
 
 const SatelliteTracker = () => {
-    const [satellites, setSatellites] = useState([]);
+  const [satellitesPosition, setSatellitesPosition] = useState([]);
+  const [satelliteMetadata, setSatelliteMetadata] = useState({}); // id → metadata
 
-    // Загрузка данных о спутниках
-    const fetchSatellites = async () => {
-        try {
-            const response = await axios.get('http://127.0.0.1:8000/api/v1/satellites/positions');
-            setSatellites(response.data);
-        } catch (error) {
-            console.error('Ошибка при загрузке позиций спутников:', error);
-        }
-    };
+  // Загрузка метаданных спутников
+  const fetchMetadata = async () => {
+    try {
+      const res = await axios.get('http://127.0.0.1:8000/api/v1/satellites');
+      const metaMap = {};
+      res.data.items.forEach(item => {
+        metaMap[item.id] = item; // используем id как ключ
+      });
+      setSatelliteMetadata(metaMap);
+    } catch (err) {
+      console.error('Ошибка загрузки метаданных:', err);
+    }
+  };
 
-    useEffect(() => {
-        fetchSatellites(); // Сначала загружаем сразу
-        const interval = setInterval(fetchSatellites, 2000); // Повтор каждые 2 секунды
+  // Загрузка позиций
+  const fetchPositions = async () => {
+    try {
+      const res = await axios.get('http://127.0.0.1:8000/api/v1/satellites/positions');
+      setSatellitesPosition(res.data);
+    } catch (err) {
+      console.error('Ошибка загрузки позиций:', err);
+    }
+  };
 
-        return () => clearInterval(interval);
-    }, []);
+  // Инициализация
+  useEffect(() => {
+    fetchMetadata();
+    fetchPositions();
+    const interval = setInterval(fetchPositions, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-    return (
-        <MapContainer center={[0, 0]} zoom={2}
-                      style={{height: '100vh', width: '100%'}}>
-            <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            />
-            {satellites.map((sat) => (
-                <Marker
-                    key={sat.satellite_id}
-                    position={[sat.geodetic.lat, sat.geodetic.lon]}
-                    icon={satelliteIcon}>
-                    <Popup>
-                        <b>{sat.satellite_name}</b><br/>
-                        ID: {sat.satellite_id}<br/>
-                        Время: {sat.timestamp}
-                    </Popup>
-                </Marker>
-            ))}
-        </MapContainer>
-    );
+  // Функция получения метаданных по satellite_id
+  const getSatelliteInfo = (satId) => {
+    return satelliteMetadata[satId] || null;
+  };
+
+  return (
+    <MapContainer center={[0, 0]} zoom={2} style={{ height: '100vh', width: '100%' }}>
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      />
+
+      {satellitesPosition.map((pos) => {
+        const meta = getSatelliteInfo(pos.satellite_id);
+        if (!meta) return null;
+
+        return (
+          <Marker
+            key={pos.satellite_id}
+            position={[pos.geodetic.lat, pos.geodetic.lon]}
+            icon={satelliteIcon}
+          >
+            <Popup>
+              <h3>{meta.name}</h3>
+              <strong>Страна/Оператор:</strong> {meta.country} / {meta.operator}<br/>
+              <strong>Тип орбиты:</strong> {meta.orbit_type}<br/>
+              <strong>Высота
+                орбиты:</strong> ~{meta.approx_altitude_km} км<br/>
+              <strong>Период обращения:</strong> {meta.period_minutes} мин<br/>
+              <strong>Текущие координаты:</strong><br/>
+              Lat: {pos.geodetic.lat.toFixed(4)}°,
+              Lon: {pos.geodetic.lon.toFixed(4)}°<br/>
+              <strong>Время:</strong> {new Date(pos.timestamp).toLocaleString()}
+              {/* Пока без "времени следующего пролёта" */}
+            </Popup>
+          </Marker>
+        );
+      })}
+    </MapContainer>
+  );
 };
 
 export default SatelliteTracker;
