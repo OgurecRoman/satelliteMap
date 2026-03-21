@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -27,7 +28,15 @@ class TLEService:
         seed_path = Path(settings.seed_file_path)
         if not seed_path.exists():
             raise BadRequestError(f"Seed file not found: {seed_path}")
-        payload = json.loads(seed_path.read_text(encoding="utf-8"))
+
+        try:
+            payload = json.loads(seed_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise BadRequestError(f"Seed file is not valid JSON: {exc}") from exc
+
+        if not isinstance(payload, list) or not payload:
+            raise BadRequestError("Seed file must contain a non-empty JSON array")
+
         created_satellites = 0
         updated_satellites = 0
         created_tle_records = 0
@@ -35,21 +44,18 @@ class TLEService:
 
         for item in payload:
             try:
-                validate_tle_pair(item["line1"], item["line2"])
+                parsed_record, source, metadata = self._parse_seed_item(item)
                 result = self._upsert_satellite_with_tle(
-                    ParsedTLE(name=item["name"], line1=item["line1"], line2=item["line2"]),
-                    source=item.get("source", "seed"),
-                    metadata={
-                        "country": item.get("country", "Unknown"),
-                        "operator": item.get("operator", "Unknown"),
-                        "purpose": item.get("purpose", "Unknown"),
-                    },
+                    record=parsed_record,
+                    source=source,
+                    metadata=metadata,
                 )
                 created_satellites += int(result == "created")
                 updated_satellites += int(result == "updated")
                 created_tle_records += 1
             except Exception as exc:  # noqa: BLE001
-                invalid_entries.append(f"{item.get('name', 'unknown')}: {exc}")
+                item_name = item.get("name", "unknown") if isinstance(item, dict) else "unknown"
+                invalid_entries.append(f"{item_name}: {exc}")
 
         self.session.commit()
         return TLEUploadResult(
@@ -139,12 +145,75 @@ class TLEService:
             period_minutes=satellite.period_minutes,
         )
 
-    def _upsert_satellite_with_tle(self, record: ParsedTLE, source: str, metadata: dict) -> str:
+    def _parse_seed_item(self, item: dict[str, Any]) -> tuple[ParsedTLE, str, dict[str, Any]]:
+        if not isinstance(item, dict):
+            raise BadRequestError("Each seed item must be a JSON object")
+
+        name = self._clean_string(item.get("name"))
+        if not name:
+            raise BadRequestError("Seed item is missing 'name'")
+
+        line1 = self._clean_string(item.get("tle_line1") or item.get("line1"))
+        line2 = self._clean_string(item.get("tle_line2") or item.get("line2"))
+        if not line1 or not line2:
+            raise BadRequestError("Seed item is missing 'tle_line1'/'tle_line2' (or 'line1'/'line2')")
+
+        validate_tle_pair(line1, line2)
+
+        norad_from_tle = norad_id_from_tle(line1)
+        norad_from_json = item.get("norad_id")
+        if norad_from_json is not None and str(norad_from_json).strip() != norad_from_tle:
+            raise BadRequestError(
+                f"Seed norad_id '{norad_from_json}' does not match TLE norad_id '{norad_from_tle}'"
+            )
+
+        raw_metadata = item.get("metadata")
+        if raw_metadata is not None and not isinstance(raw_metadata, dict):
+            raise BadRequestError("Seed item 'metadata' must be an object")
+        metadata = raw_metadata or {}
+
+        normalized_metadata = {
+            "country": self._clean_string(metadata.get("country")) or "Unknown",
+            "operator": self._clean_string(metadata.get("operator")) or "Unknown",
+            "purpose": self._clean_string(metadata.get("purpose")) or "Unknown",
+        }
+
+        normalized_orbit_type = self._normalize_orbit_type(metadata.get("orbit_type"))
+        if normalized_orbit_type:
+            normalized_metadata["orbit_type"] = normalized_orbit_type
+
+        orbit_height = self._to_float(metadata.get("orbit_height_km"))
+        if orbit_height is not None:
+            normalized_metadata["approx_altitude_km"] = orbit_height
+
+        period_minutes = self._to_float(metadata.get("period_min"))
+        if period_minutes is not None:
+            normalized_metadata["period_minutes"] = period_minutes
+
+        inclination = self._to_float(metadata.get("inclination"))
+        if inclination is not None:
+            normalized_metadata["inclination"] = inclination
+
+        parsed_record = ParsedTLE(name=name, line1=line1, line2=line2)
+        source = self._clean_string(item.get("source")) or "seed"
+        return parsed_record, source, normalized_metadata
+
+    def _upsert_satellite_with_tle(self, record: ParsedTLE, source: str, metadata: dict[str, Any]) -> str:
         line1 = record.line1
         line2 = record.line2
         validate_tle_pair(line1, line2)
         norad_id = norad_id_from_tle(line1)
         checksum_valid = validate_tle_checksum(line1) and validate_tle_checksum(line2)
+
+        resolved_orbit_type = metadata.get("orbit_type") or PropagationService.determine_orbit_type(line2)
+        resolved_altitude = metadata.get("approx_altitude_km")
+        if resolved_altitude is None:
+            resolved_altitude = PropagationService.approx_altitude_km(line2)
+
+        resolved_period = metadata.get("period_minutes")
+        if resolved_period is None:
+            resolved_period = PropagationService.orbital_period_minutes(line2)
+
         satellite = self.sat_repo.get_by_norad_id(norad_id)
         status = "updated"
         if satellite is None:
@@ -155,9 +224,9 @@ class TLEService:
                 country=metadata.get("country", "Unknown"),
                 operator=metadata.get("operator", "Unknown"),
                 purpose=metadata.get("purpose", "Unknown"),
-                orbit_type=PropagationService.determine_orbit_type(line2),
-                approx_altitude_km=PropagationService.approx_altitude_km(line2),
-                period_minutes=PropagationService.orbital_period_minutes(line2),
+                orbit_type=resolved_orbit_type,
+                approx_altitude_km=resolved_altitude,
+                period_minutes=resolved_period,
             )
             self.session.add(satellite)
             self.session.flush()
@@ -166,9 +235,9 @@ class TLEService:
             satellite.country = metadata.get("country", satellite.country)
             satellite.operator = metadata.get("operator", satellite.operator)
             satellite.purpose = metadata.get("purpose", satellite.purpose)
-            satellite.orbit_type = PropagationService.determine_orbit_type(line2)
-            satellite.approx_altitude_km = PropagationService.approx_altitude_km(line2)
-            satellite.period_minutes = PropagationService.orbital_period_minutes(line2)
+            satellite.orbit_type = resolved_orbit_type
+            satellite.approx_altitude_km = resolved_altitude
+            satellite.period_minutes = resolved_period
             self.tle_repo.deactivate_satellite_records(satellite.id)
 
         tle_record = TLERecord(
@@ -186,3 +255,27 @@ class TLEService:
         self.session.add(satellite)
         self.session.flush()
         return status
+
+    @staticmethod
+    def _clean_string(value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @staticmethod
+    def _to_float(value: Any) -> float | None:
+        if value is None or value == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _normalize_orbit_type(value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip().upper()
+        allowed = {"LEO", "MEO", "GEO", "HEO", "UNKNOWN"}
+        return normalized if normalized in allowed else None
