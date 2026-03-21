@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
+const TICK_MS = 250;
+
 export default function useSimulationClock() {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [isPlaying, setIsPlaying] = useState(false);
@@ -11,8 +13,8 @@ export default function useSimulationClock() {
     }
 
     const interval = window.setInterval(() => {
-      setCurrentTime((prev) => new Date(prev.getTime() + 1000 * speedMultiplier));
-    }, 1000);
+      setCurrentTime((prev) => new Date(prev.getTime() + TICK_MS * speedMultiplier));
+    }, TICK_MS);
 
     return () => window.clearInterval(interval);
   }, [isPlaying, speedMultiplier]);

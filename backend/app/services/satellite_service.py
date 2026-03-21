@@ -86,6 +86,7 @@ class SatelliteService:
             ecef=state["ecef"],
             eci=state["eci"],
             velocity=state["velocity_eci"],
+            velocity_ecef=state["velocity_ecef"],
         )
 
     def get_positions(self, timestamp: datetime | None, **filters) -> list[SatellitePositionResponse]:

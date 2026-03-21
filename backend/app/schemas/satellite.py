@@ -102,6 +102,7 @@ class SatellitePositionResponse(BaseModel):
     ecef: CartesianCoordinates | None = None
     eci: CartesianCoordinates | None = None
     velocity: VelocityVector
+    velocity_ecef: VelocityVector | None = None
 
 
 class SatelliteCardResponse(SatelliteSummary):

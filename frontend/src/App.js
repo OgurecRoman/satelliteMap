@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import SatelliteTracker from './components/SatelliteTracker';
 import Earth3D from './components/Earth3D';
@@ -13,7 +13,6 @@ import {
   getSatelliteCoverage,
   getSatelliteFilters,
   getSatellitePositions,
-  getSatellites,
   getSatelliteTrack,
   getSatelliteVisibility,
 } from './api/satellites';
@@ -21,6 +20,9 @@ import { runCompareGroups, runPointPassAnalysis, runRegionPassAnalysis } from '.
 import { createSubscription, listSubscriptions } from './api/notifications';
 
 const INITIAL_FILTERS = { country: '', operator: '', orbit_type: '', purpose: '', search: '' };
+const POSITION_REFRESH_SIM_MS = 90 * 1000;
+const CARD_REFRESH_SIM_MS = 60 * 1000;
+const SCRUB_REFRESH_DEBOUNCE_MS = 350;
 
 function sanitizeFilters(filters) {
   return Object.fromEntries(Object.entries(filters).filter(([, value]) => value));
@@ -34,7 +36,6 @@ function App() {
   const [activeView, setActiveView] = useState('2d');
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [filterOptions, setFilterOptions] = useState({ countries: [], operators: [], orbit_types: [], purposes: [] });
-  const [satellitesMeta, setSatellitesMeta] = useState([]);
   const [positions, setPositions] = useState([]);
   const [selectedSatelliteId, setSelectedSatelliteId] = useState(null);
   const [selectedPoint, setSelectedPoint] = useState(null);
@@ -46,8 +47,13 @@ function App() {
   const [pointAnalysisResult, setPointAnalysisResult] = useState(null);
   const [regionAnalysisResult, setRegionAnalysisResult] = useState(null);
   const [compareResult, setCompareResult] = useState(null);
-  const [loadingState, setLoadingState] = useState({ filters: false, metadata: false, positions: false, card: false, analysis: false, subscriptions: false });
+  const [loadingState, setLoadingState] = useState({ filters: false, positions: false, card: false, analysis: false, subscriptions: false });
   const [errorState, setErrorState] = useState({ positions: '', card: '', analysis: '' });
+  const [lastPositionsFetchTime, setLastPositionsFetchTime] = useState(null);
+  const [lastCardFetchTime, setLastCardFetchTime] = useState(null);
+
+  const positionsRequestIdRef = useRef(0);
+  const cardRequestIdRef = useRef(0);
 
   const { currentTime, setCurrentTime, isPlaying, togglePlayback, speedMultiplier, setSpeedMultiplier, resetToNow } = useSimulationClock();
 
@@ -61,28 +67,49 @@ function App() {
     return () => { ignore = true; };
   }, []);
 
+  const loadPositions = useCallback(async (timestamp) => {
+    const requestId = ++positionsRequestIdRef.current;
+    setLoadingState((prev) => ({ ...prev, positions: true }));
+    setErrorState((prev) => ({ ...prev, positions: '' }));
+    try {
+      const data = await getSatellitePositions({ ...sanitizeFilters(filters), timestamp: timestamp.toISOString() });
+      if (positionsRequestIdRef.current !== requestId) return;
+      setPositions(data || []);
+      setLastPositionsFetchTime(new Date(timestamp));
+    } catch (error) {
+      if (positionsRequestIdRef.current !== requestId) return;
+      setErrorState((prev) => ({ ...prev, positions: formatApiError(error, 'Не удалось загрузить текущие позиции спутников.') }));
+    } finally {
+      if (positionsRequestIdRef.current === requestId) {
+        setLoadingState((prev) => ({ ...prev, positions: false }));
+      }
+    }
+  }, [filters]);
+
   useEffect(() => {
-    if (activeView !== '3d') return undefined;
-    let ignore = false;
-    setLoadingState((prev) => ({ ...prev, metadata: true }));
-    getSatellites(sanitizeFilters(filters))
-      .then((data) => { if (!ignore) setSatellitesMeta(data.items || []); })
-      .catch((error) => { if (!ignore) setErrorState((prev) => ({ ...prev, positions: formatApiError(error, 'Не удалось загрузить метаданные спутников.') })); })
-      .finally(() => { if (!ignore) setLoadingState((prev) => ({ ...prev, metadata: false })); });
-    return () => { ignore = true; };
-  }, [activeView, filters]);
+    if (activeView !== '3d') return;
+    setLastPositionsFetchTime(null);
+    loadPositions(currentTime);
+  }, [activeView, currentTime, filters, loadPositions]);
 
   useEffect(() => {
     if (activeView !== '3d') return undefined;
-    let ignore = false;
-    setLoadingState((prev) => ({ ...prev, positions: true }));
-    setErrorState((prev) => ({ ...prev, positions: '' }));
-    getSatellitePositions({ ...sanitizeFilters(filters), timestamp: currentTime.toISOString() })
-      .then((data) => { if (!ignore) setPositions(data || []); })
-      .catch((error) => { if (!ignore) setErrorState((prev) => ({ ...prev, positions: formatApiError(error, 'Не удалось загрузить текущие позиции спутников.') })); })
-      .finally(() => { if (!ignore) setLoadingState((prev) => ({ ...prev, positions: false })); });
-    return () => { ignore = true; };
-  }, [activeView, currentTime, filters]);
+    if (!lastPositionsFetchTime) return undefined;
+
+    const driftMs = Math.abs(currentTime.getTime() - lastPositionsFetchTime.getTime());
+    if (isPlaying) {
+      if (!loadingState.positions && driftMs >= POSITION_REFRESH_SIM_MS) {
+        loadPositions(currentTime);
+      }
+      return undefined;
+    }
+
+    if (driftMs < 5000) return undefined;
+    const timer = window.setTimeout(() => {
+      loadPositions(currentTime);
+    }, SCRUB_REFRESH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeView, currentTime, isPlaying, lastPositionsFetchTime, loadPositions, loadingState.positions]);
 
   useEffect(() => {
     if (activeView !== '3d') return undefined;
@@ -95,6 +122,41 @@ function App() {
     return () => { ignore = true; };
   }, [activeView]);
 
+  const loadSelectedSatelliteData = useCallback(async (timestamp) => {
+    if (!selectedSatelliteId) return;
+
+    const requestId = ++cardRequestIdRef.current;
+    setLoadingState((prev) => ({ ...prev, card: true }));
+    setErrorState((prev) => ({ ...prev, card: '' }));
+
+    const pointParams = selectedPoint ? { point_lat: selectedPoint.lat, point_lon: selectedPoint.lon } : {};
+    const startTime = new Date(timestamp.getTime() - 45 * 60 * 1000);
+    const endTime = new Date(timestamp.getTime() + 90 * 60 * 1000);
+
+    try {
+      const [cardData, trackData, visibilityData, coverageData] = await Promise.all([
+        getSatelliteCard(selectedSatelliteId, { timestamp: timestamp.toISOString(), ...pointParams }),
+        getSatelliteTrack(selectedSatelliteId, { start_time: startTime.toISOString(), end_time: endTime.toISOString(), step_seconds: 120 }),
+        getSatelliteVisibility(selectedSatelliteId, { timestamp: timestamp.toISOString() }),
+        getSatelliteCoverage(selectedSatelliteId, { timestamp: timestamp.toISOString() }),
+      ]);
+
+      if (cardRequestIdRef.current !== requestId) return;
+      setSatelliteCard(cardData);
+      setTrack(trackData);
+      setVisibilityFootprint(visibilityData);
+      setCoverageFootprint(coverageData);
+      setLastCardFetchTime(new Date(timestamp));
+    } catch (error) {
+      if (cardRequestIdRef.current !== requestId) return;
+      setErrorState((prev) => ({ ...prev, card: formatApiError(error, 'Не удалось загрузить данные выбранного спутника.') }));
+    } finally {
+      if (cardRequestIdRef.current === requestId) {
+        setLoadingState((prev) => ({ ...prev, card: false }));
+      }
+    }
+  }, [selectedPoint, selectedSatelliteId]);
+
   useEffect(() => {
     if (!selectedSatelliteId || activeView !== '3d') {
       setSatelliteCard(null);
@@ -102,43 +164,39 @@ function App() {
       setVisibilityFootprint(null);
       setCoverageFootprint(null);
       setErrorState((prev) => ({ ...prev, card: '' }));
+      setLastCardFetchTime(null);
+      return;
+    }
+
+    loadSelectedSatelliteData(currentTime);
+  }, [activeView, currentTime, selectedSatelliteId, selectedPoint, loadSelectedSatelliteData]);
+
+  useEffect(() => {
+    if (activeView !== '3d' || !selectedSatelliteId || !lastCardFetchTime) return undefined;
+
+    const driftMs = Math.abs(currentTime.getTime() - lastCardFetchTime.getTime());
+    if (isPlaying) {
+      if (!loadingState.card && driftMs >= CARD_REFRESH_SIM_MS) {
+        loadSelectedSatelliteData(currentTime);
+      }
       return undefined;
     }
 
-    let ignore = false;
-    setLoadingState((prev) => ({ ...prev, card: true }));
-    setErrorState((prev) => ({ ...prev, card: '' }));
+    if (driftMs < 5000) return undefined;
+    const timer = window.setTimeout(() => {
+      loadSelectedSatelliteData(currentTime);
+    }, SCRUB_REFRESH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeView, currentTime, isPlaying, lastCardFetchTime, loadSelectedSatelliteData, loadingState.card, selectedSatelliteId]);
 
-    const pointParams = selectedPoint ? { point_lat: selectedPoint.lat, point_lon: selectedPoint.lon } : {};
-    const startTime = new Date(currentTime.getTime() - 45 * 60 * 1000);
-    const endTime = new Date(currentTime.getTime() + 90 * 60 * 1000);
+  const satellitesFor3D = useMemo(() => positions.filter((item) => item.geodetic || item.ecef), [positions]);
 
-    Promise.all([
-      getSatelliteCard(selectedSatelliteId, { timestamp: currentTime.toISOString(), ...pointParams }),
-      getSatelliteTrack(selectedSatelliteId, { start_time: startTime.toISOString(), end_time: endTime.toISOString(), step_seconds: 180 }),
-      getSatelliteVisibility(selectedSatelliteId, { timestamp: currentTime.toISOString() }),
-      getSatelliteCoverage(selectedSatelliteId, { timestamp: currentTime.toISOString() }),
-    ])
-      .then(([cardData, trackData, visibilityData, coverageData]) => {
-        if (!ignore) {
-          setSatelliteCard(cardData);
-          setTrack(trackData);
-          setVisibilityFootprint(visibilityData);
-          setCoverageFootprint(coverageData);
-        }
-      })
-      .catch((error) => { if (!ignore) setErrorState((prev) => ({ ...prev, card: formatApiError(error, 'Не удалось загрузить данные выбранного спутника.') })); })
-      .finally(() => { if (!ignore) setLoadingState((prev) => ({ ...prev, card: false })); });
+  const selectedSatellitePreview = useMemo(() => {
+    if (!selectedSatelliteId) return null;
+    return satellitesFor3D.find((item) => item.satellite_id === selectedSatelliteId) || null;
+  }, [satellitesFor3D, selectedSatelliteId]);
 
-    return () => { ignore = true; };
-  }, [activeView, currentTime, selectedPoint, selectedSatelliteId]);
-
-  const metaById = useMemo(() => satellitesMeta.reduce((accumulator, item) => {
-    accumulator[item.id] = item;
-    return accumulator;
-  }, {}), [satellitesMeta]);
-
-  const satellitesFor3D = useMemo(() => positions.filter((item) => item.geodetic).map((item) => ({ ...item, meta: metaById[item.satellite_id] || null })), [metaById, positions]);
+  const selectedSatelliteVisual = selectedSatellitePreview || satelliteCard?.current_position || null;
 
   useEffect(() => {
     if (!selectedSatelliteId) return;
@@ -228,22 +286,33 @@ function App() {
           </div>
         ) : (
           <div className="view-layer view-layer-3d">
-            <Earth3D satellites={satellitesFor3D} selectedSatelliteId={selectedSatelliteId} onSelectSatellite={setSelectedSatelliteId} onSelectPoint={setSelectedPoint} selectedPoint={selectedPoint} track={track} visibilityFootprint={visibilityFootprint} coverageFootprint={coverageFootprint} />
+            <Earth3D
+              satellites={satellitesFor3D}
+              currentTime={currentTime}
+              selectedSatellite={selectedSatelliteVisual}
+              selectedSatelliteId={selectedSatelliteId}
+              onSelectSatellite={setSelectedSatelliteId}
+              onSelectPoint={setSelectedPoint}
+              selectedPoint={selectedPoint}
+              track={track}
+              visibilityFootprint={visibilityFootprint}
+              coverageFootprint={coverageFootprint}
+            />
             <aside className="side-panel left-panel">
               <TimeControls currentTime={currentTime} setCurrentTime={setCurrentTime} isPlaying={isPlaying} togglePlayback={togglePlayback} speedMultiplier={speedMultiplier} setSpeedMultiplier={setSpeedMultiplier} resetToNow={resetToNow} />
               <FiltersPanel filters={filters} onFiltersChange={setFilters} filterOptions={filterOptions} positionsCount={satellitesFor3D.length} />
               <SatellitePickerPanel satellites={satellitesFor3D} selectedSatelliteId={selectedSatelliteId} onSelectSatellite={setSelectedSatelliteId} />
             </aside>
             <aside className="side-panel right-panel">
-              <SatelliteDetailsPanel satelliteCard={satelliteCard} selectedPoint={selectedPoint} loading={loadingState.card} error={errorState.card} />
+              <SatelliteDetailsPanel satelliteCard={satelliteCard} selectedPoint={selectedPoint} selectedSatellitePreview={selectedSatellitePreview} track={track} visibilityFootprint={visibilityFootprint} coverageFootprint={coverageFootprint} loading={loadingState.card} error={errorState.card} />
               <AnalysisPanel currentTime={currentTime} selectedPoint={selectedPoint} selectedSatelliteId={selectedSatelliteId} activeFilters={sanitizeFilters(filters)} onRunPointAnalysis={runPointAnalysis} onRunRegionAnalysis={runRegionAnalysis} onRunCompareGroups={runGroupCompare} onCreateSubscription={handleCreateSubscription} subscriptions={subscriptions} filterOptions={filterOptions} results={{ point: pointAnalysisResult, region: regionAnalysisResult, compare: compareResult }} loading={loadingState.analysis || loadingState.subscriptions} error={errorState.analysis} />
             </aside>
             <div className="floating-note bottom-note">
               <div>
                 <strong>3D-режим</strong>
-                <p>Оранжевая линия — трек, зелёная — радиовидимость, фиолетовая — покрытие. Точка на Земле ставится только левым кликом.</p>
+                <p>Оранжевая линия — трек, зелёная — радиовидимость, фиолетовая — покрытие. Сначала идёт выбор спутника, затем — постановка точки на Земле.</p>
               </div>
-              {loadingState.positions ? <span className="status-pill">Обновляем позиции…</span> : null}
+              {loadingState.positions ? <span className="status-pill">Обновляем опорные позиции…</span> : null}
             </div>
             {errorState.positions ? <div className="floating-error">{errorState.positions}</div> : null}
             {hasNo3DData ? (

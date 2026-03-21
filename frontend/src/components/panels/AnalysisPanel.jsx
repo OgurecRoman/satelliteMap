@@ -21,8 +21,8 @@ export default function AnalysisPanel({
   loading,
   error,
 }) {
-  const [pointForm, setPointForm] = useState({ lat: 55.75, lon: 37.62, horizon_hours: 24, step_seconds: 300 });
-  const [regionForm, setRegionForm] = useState({ ...DEFAULT_REGION, horizon_hours: 24, step_seconds: 600 });
+  const [pointForm, setPointForm] = useState({ lat: 55.75, lon: 37.62, horizon_hours: 6, step_seconds: 600 });
+  const [regionForm, setRegionForm] = useState({ ...DEFAULT_REGION, horizon_hours: 6, step_seconds: 900 });
   const [groupA, setGroupA] = useState(DEFAULT_GROUP_A);
   const [groupB, setGroupB] = useState(DEFAULT_GROUP_B);
   const [subscriptionForm, setSubscriptionForm] = useState({
@@ -30,8 +30,8 @@ export default function AnalysisPanel({
     target_type: 'point',
     contact_email: '',
     note: '',
-    horizon_hours: 24,
-    step_seconds: 300,
+    horizon_hours: 6,
+    step_seconds: 600,
   });
 
   useEffect(() => {
@@ -129,7 +129,7 @@ export default function AnalysisPanel({
 
       <div className="stack-card">
         <h4>Анализ пролётов над точкой</h4>
-        <p className="muted-text">Используйте точку, выбранную на глобусе, или вручную задайте координаты ниже.</p>
+        <p className="muted-text">Используйте точку, выбранную на глобусе, или вручную задайте координаты ниже. Для больших наборов спутников по умолчанию используется более щадящий горизонт расчёта.</p>
         <div className="field-grid two-columns">
           <div>
             <label className="field-label">Широта</label>
