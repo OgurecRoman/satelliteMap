@@ -57,8 +57,8 @@ curl -X POST http://127.0.0.1:8000/api/v1/tle/seed
 ```
 
 ## Переменные окружения
-- `SCHEDULER_ENABLED` - включает фоновое автообновление TLE.
-- `SCHEDULER_INTERVAL_MINUTES` - как часто обновлять TLE в минутах.
+- `SCHEDULER_ENABLED` - включает фоновую проверку подписок и уведомлений.
+- `SCHEDULER_INTERVAL_MINUTES` - как часто обновлять проверку в минутах.
 - `POSITION_CACHE_SIZE` - размер кэша для расчётов позиций спутников
 - `DEFAULT_HORIZON_HOURS` - на сколько часов вперёд искать следующий пролёт по умолчанию
 - `DEFAULT_STEP_SECONDS` - шаг расчёта в секундах для трека и поиска пролётов.
