@@ -34,6 +34,13 @@ function formatApiError(error, fallbackMessage) {
 
 function App() {
   const [activeView, setActiveView] = useState('2d');
+  const [fancyMode, setFancyMode] = useState(() => {
+    if (typeof window === 'undefined') return String(process.env.REACT_APP_FANCY || '').toLowerCase() === 'true';
+    const savedValue = window.localStorage.getItem('satellite-fancy-mode');
+    if (savedValue === 'true') return true;
+    if (savedValue === 'false') return false;
+    return String(process.env.REACT_APP_FANCY || '').toLowerCase() === 'true';
+  });
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [filterOptions, setFilterOptions] = useState({ countries: [], operators: [], orbit_types: [], purposes: [] });
   const [positions, setPositions] = useState([]);
@@ -61,6 +68,13 @@ function App() {
   useEffect(() => {
     currentTimeRef.current = currentTime;
   }, [currentTime]);
+
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('satellite-fancy-mode', String(fancyMode));
+    }
+  }, [fancyMode]);
 
   useEffect(() => {
     let ignore = false;
@@ -301,6 +315,7 @@ function App() {
               track={track}
               visibilityFootprint={visibilityFootprint}
               coverageFootprint={coverageFootprint}
+              fancyMode={fancyMode}
             />
             <aside className="side-panel left-panel">
               <TimeControls currentTime={currentTime} setCurrentTime={setCurrentTime} isPlaying={isPlaying} togglePlayback={togglePlayback} speedMultiplier={speedMultiplier} setSpeedMultiplier={setSpeedMultiplier} resetToNow={resetToNow} />
@@ -316,7 +331,18 @@ function App() {
                 <strong>3D-режим</strong>
                 <p>Оранжевая линия — трек, зелёная — радиовидимость, фиолетовая — покрытие. Сначала идёт выбор спутника, затем — постановка точки на Земле.</p>
               </div>
-              {loadingState.positions ? <span className="status-pill">Обновляем опорные позиции…</span> : null}
+              <div className="bottom-note-actions">
+                <label className="fancy-toggle" htmlFor="fancy-mode-toggle">
+                  <input
+                    id="fancy-mode-toggle"
+                    type="checkbox"
+                    checked={fancyMode}
+                    onChange={(event) => setFancyMode(event.target.checked)}
+                  />
+                  <span>Fancy режим</span>
+                </label>
+                {loadingState.positions ? <span className="status-pill">Обновляем опорные позиции…</span> : null}
+              </div>
             </div>
             {errorState.positions ? <div className="floating-error">{errorState.positions}</div> : null}
             {hasNo3DData ? (

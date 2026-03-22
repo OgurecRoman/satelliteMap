@@ -275,12 +275,12 @@ export default function AnalysisPanel({
         {results.compare ? (
           <div className="result-list">
             {results.compare.groups.map((group) => (
-              <div key={group.name} className="result-item compact">
+              <div key={group.name} className="result-item compare-result-item">
                 <div className="truncate-container">
                   <strong className="truncate-text" title={group.name}>{truncateText(group.name)}</strong>
                   <p>{group.count} спутников</p>
                 </div>
-                <div>
+                <div className="compare-result-metrics">
                   <p>Средняя высота {formatCoordinate(group.avg_altitude_km)} км</p>
                   <p className="muted-text">Средний период {formatCoordinate(group.avg_period_minutes)} мин</p>
                 </div>

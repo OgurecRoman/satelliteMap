@@ -14,7 +14,7 @@ import {
 } from '../utils/coordinates';
 import worldData from '../assets/world-lowres.json';
 
-const FANCY_RENDERING = String(process.env.REACT_APP_FANCY || '').toLowerCase() === 'true';
+const DEFAULT_FANCY_RENDERING = String(process.env.REACT_APP_FANCY || '').toLowerCase() === 'true';
 
 const CONTINENT_COLORS = {
   Africa: '#5fa85c',
@@ -337,8 +337,8 @@ function SatelliteCloudFancy({
   );
 }
 
-function SatelliteCloud(props) {
-  return FANCY_RENDERING ? <SatelliteCloudFancy {...props} /> : <SatelliteCloudFast {...props} />;
+function SatelliteCloud({ fancy, ...props }) {
+  return fancy ? <SatelliteCloudFancy {...props} /> : <SatelliteCloudFast {...props} />;
 }
 
 function SelectedSatelliteMarker({ satellite, timeRef }) {
@@ -634,6 +634,7 @@ function SceneContent({
   track,
   visibilityFootprint,
   coverageFootprint,
+  fancyMode,
 }) {
   const renderedPositionsRef = useRef(new Float32Array(0));
   const renderedIdsRef = useRef([]);
@@ -673,6 +674,7 @@ function SceneContent({
         selectedSatelliteId={selectedSatelliteId}
         renderedPositionsRef={renderedPositionsRef}
         renderedIdsRef={renderedIdsRef}
+        fancy={fancyMode}
       />
       <SelectedSatelliteMarker satellite={selectedSatellite} timeRef={timeRef} />
       <TrackLine track={track} />
@@ -711,13 +713,15 @@ export default function Earth3D({
   track,
   visibilityFootprint,
   coverageFootprint,
+  fancyMode = DEFAULT_FANCY_RENDERING,
 }) {
   return (
     <div className="globe-canvas-shell">
       <Canvas
+        key={fancyMode ? 'fancy' : 'fast'}
         dpr={[1, 1.5]}
         camera={{ position: [0, 4.6, 6.5], fov: 48 }}
-        gl={{ antialias: FANCY_RENDERING, powerPreference: 'high-performance' }}
+        gl={{ antialias: fancyMode, powerPreference: 'high-performance' }}
       >
         <SceneContent
           satellites={satellites}
@@ -732,6 +736,7 @@ export default function Earth3D({
           track={track}
           visibilityFootprint={visibilityFootprint}
           coverageFootprint={coverageFootprint}
+          fancyMode={fancyMode}
         />
       </Canvas>
     </div>

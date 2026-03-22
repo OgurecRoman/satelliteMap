@@ -100,6 +100,48 @@ textarea { resize: vertical; }
 .left-note { left: 18px; bottom: 18px; }
 .bottom-note { left: 50%; transform: translateX(-50%); bottom: 18px; display: flex; align-items: center; gap: 16px; }
 .floating-note p, .floating-error p { margin: 4px 0 0; }
+.bottom-note-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+
+.fancy-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.fancy-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.compare-result-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: flex-start;
+}
+
+.compare-result-metrics {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.compare-result-item p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.view-layer-2d .leaflet-top {
+  top: 92px;
+}
+
 .floating-error { position: fixed; bottom: 18px; right: 18px; z-index: 26; padding: 14px 16px; border-radius: 16px; max-width: 380px; }
 .empty-state-overlay { position: fixed; inset: 50% auto auto 50%; transform: translate(-50%, -50%); z-index: 26; max-width: 520px; padding: 24px; text-align: center; }
 .globe-label { padding: 6px 10px; border-radius: 999px; background: rgba(2, 6, 23, 0.9); border: 1px solid rgba(148, 163, 184, 0.2); color: #e2e8f0; font-size: 12px; white-space: nowrap; }
@@ -113,6 +155,7 @@ textarea { resize: vertical; }
   .left-panel, .right-panel { inset: auto; }
   .field-grid.two-columns, .detail-grid { grid-template-columns: 1fr; }
   .bottom-note { display: block; }
+  .view-layer-2d .leaflet-top { top: 0; }
 }
 
 .app-header-bar .mode-toggle { margin-left: auto; }
