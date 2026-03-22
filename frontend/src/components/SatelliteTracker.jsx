@@ -534,8 +534,8 @@ const SatelliteTracker = () => {
         // Если кликнули на уже выбранный спутник, снимаем выбор
         if (selectedSatelliteId === satelliteId) {
             setSelectedSatelliteId(null);
-            fetchCoverage(null);
-            fetchVisibility(null);
+            setVisibilityFootprint(null);
+            setCoverageFootprint(null);
         } else {
             setSelectedSatelliteId(satelliteId);
             fetchCoverage(satelliteId);
