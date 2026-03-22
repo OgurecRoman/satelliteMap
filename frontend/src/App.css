@@ -479,9 +479,18 @@ textarea {
   align-items: flex-start;
 }
 
+.result-item-wide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+}
+
 .footprint-stats {
   display: grid;
   gap: 4px;
+  min-width: 120px;
+  max-width: 100%;
   justify-items: end;
   text-align: right;
 }
@@ -489,6 +498,18 @@ textarea {
 .footprint-stats span {
   color: var(--muted);
   font-size: 13px;
+}
+
+@media (max-width: 1320px) {
+  .result-item-wide {
+    grid-template-columns: 1fr;
+  }
+
+  .footprint-stats {
+    justify-items: start;
+    text-align: left;
+    min-width: 0;
+  }
 }
 
 .settings-stack {
