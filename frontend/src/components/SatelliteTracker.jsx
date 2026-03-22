@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polygon, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import axios from 'axios';
@@ -42,6 +42,10 @@ const SatelliteTracker = () => {
     const [subscriptions, setSubscriptions] = useState([]);
     const [loadingAnalysis, setLoadingAnalysis] = useState(false);
     const [analysisError, setAnalysisError] = useState('');
+
+    const [coverageFootprint, setCoverageFootprint] = useState(null);
+    const [selectedSatelliteId, setSelectedSatelliteId] = useState(null);
+    const [visibilityFootprint, setVisibilityFootprint] = useState(null);
 
     const intervalRef = useRef(null);
 
@@ -362,6 +366,50 @@ const runCompareGroups = async (payload) => {
         }).sort((a, b) => new Date(a.flyover_time) - new Date(b.flyover_time));
     };
 
+    const fetchCoverage = async (satelliteId) => {
+        try {
+            // Находим текущую позицию спутника
+            const currentSat = satellitesPosition.find(sat => sat.satellite_id === satelliteId);
+
+            if (!currentSat) return;
+
+            const res = await axios.get(`http://127.0.0.1:8000/api/v1/satellites/${satelliteId}/coverage`, {
+                params: {
+                    lat: currentSat.geodetic.lat,
+                    lon: currentSat.geodetic.lon,
+                    timestamp: currentSat.timestamp
+                }
+            });
+
+            setCoverageFootprint(res.data);
+        } catch (err) {
+            console.error('Ошибка загрузки зоны покрытия:', err);
+            setCoverageFootprint(null);
+        }
+    };
+
+    const fetchVisibility = async (satelliteId) => {
+        try {
+            const res = await axios.get(`http://127.0.0.1:8000/api/v1/satellites/${satelliteId}/visibility`);
+            setVisibilityFootprint(res.data);
+        } catch (err) {
+            console.error('Ошибка загрузки зоны радиовидимости:', err);
+            setVisibilityFootprint(null);
+        }
+    };
+
+    const handleSatelliteClick = (satelliteId) => {
+        setSelectedSatelliteId(satelliteId);
+        fetchCoverage(satelliteId);
+        fetchVisibility(satelliteId);
+    };
+
+    const clearSelectedSatellite = () => {
+        setSelectedSatelliteId(null);
+        setCoverageFootprint(null);
+        setVisibilityFootprint(null);
+    };
+
     useEffect(() => {
         let filtered = [...satellitesPosition];
 
@@ -398,7 +446,22 @@ const runCompareGroups = async (payload) => {
                 clearInterval(intervalRef.current);
             }
         };
-    }, []);
+    },
+    []);
+
+    // Обновляем зону покрытия при движении выбранного спутника
+    useEffect(() => {
+        if (selectedSatelliteId) {
+            const currentSatellite = satellitesPosition.find(
+                sat => sat.satellite_id === selectedSatelliteId
+            );
+
+            if (currentSatellite) {
+                fetchCoverage(selectedSatelliteId);
+                fetchVisibility(selectedSatelliteId);
+            }
+        }
+    }, [satellitesPosition]); // Зависимость от обновления позиций
 
     const getSatelliteInfo = (satId) => satelliteMetadata[satId] || null;
 
@@ -461,6 +524,9 @@ const runCompareGroups = async (payload) => {
                             key={pos.satellite_id}
                             position={[pos.geodetic.lat, pos.geodetic.lon]}
                             icon={satelliteIcon}
+                            eventHandlers={{
+                                click: () => handleSatelliteClick(pos.satellite_id)
+                            }}
                         >
                             <Popup>
                                 <h3>{meta.name}</h3>
@@ -475,6 +541,34 @@ const runCompareGroups = async (payload) => {
                         </Marker>
                     );
                 })}
+
+                {coverageFootprint && coverageFootprint.center && coverageFootprint.radius_km && (
+                    <Circle
+                        center={[coverageFootprint.center.lat, coverageFootprint.center.lon]}
+                        radius={coverageFootprint.radius_km * 1000}  // переводим км в метры
+                        pathOptions={{
+                            color: '#a855f7',
+                            fillColor: '#a855f7',
+                            fillOpacity: 0.2,
+                            weight: 2,
+                            dashArray: '5, 5'
+                        }}
+                    />
+                )}
+
+                {visibilityFootprint && visibilityFootprint.center && visibilityFootprint.radius_km && (
+                    <Circle
+                        center={[visibilityFootprint.center.lat, visibilityFootprint.center.lon]}
+                        radius={visibilityFootprint.radius_km * 1000}
+                        pathOptions={{
+                            color: '#22c55e',      // зелёный
+                            fillColor: 'transparent',
+                            fillOpacity: 0,
+                            weight: 2,
+                            dashArray: '5, 5'
+                        }}
+                    />
+                )}
             </MapContainer>
 
 
