@@ -752,3 +752,49 @@ textarea {
     text-align: left;
   }
 }
+/* --- 2D/3D header and 2D controls tweaks --- */
+.app-header-bar {
+  align-items: center;
+}
+
+.app-header-bar .mode-toggle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-left: 0;
+  z-index: 1;
+}
+
+.brand-block {
+  position: relative;
+  z-index: 2;
+  max-width: min(60vw, 720px);
+}
+
+.view-layer-2d .leaflet-control-zoom {
+  margin-bottom: 18px;
+}
+
+.view-layer-2d .leaflet-left .leaflet-control-zoom {
+  margin-left: clamp(16px, 23vw, 372px);
+}
+
+.view-layer-2d .leaflet-top {
+  top: 0;
+}
+
+@media (max-width: 980px) {
+  .app-header-bar .mode-toggle {
+    position: static;
+    transform: none;
+    margin-left: 0;
+  }
+
+  .brand-block {
+    max-width: none;
+  }
+
+  .view-layer-2d .leaflet-left .leaflet-control-zoom {
+    margin-left: 10px;
+  }
+}

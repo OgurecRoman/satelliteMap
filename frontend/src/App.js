@@ -296,7 +296,7 @@ function App() {
           <div className="brand-mark">🛰️</div>
           <div>
             <p className="eyebrow">Кодим сУтками</p>
-            <h1>Платформа мониторинга пролётов спутников</h1>
+            <h2>Платформа мониторинга пролётов спутников</h2>
           </div>
         </div>
 

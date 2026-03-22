@@ -668,3 +668,83 @@
 .tab-btn:hover:not(.active) {
     background: rgba(97, 218, 251, 0.1);
 }
+/* --- 2D layout fixes --- */
+.sidebar-left,
+.sidebar-right {
+    top: 104px;
+    max-height: calc(100vh - 124px);
+}
+
+.sidebar-left {
+    left: 16px;
+    width: min(340px, calc(100vw - 32px));
+}
+
+.sidebar-right {
+    right: 16px;
+    width: min(340px, calc(100vw - 32px));
+}
+
+.analytics-section,
+.subscriptions-container,
+.flyover-name,
+.flyover-meta,
+.selected-info,
+.sidebar-hotkey-hint,
+.elevation-hint {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.elevation-section {
+    display: grid;
+    gap: 10px;
+}
+
+.elevation-control-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.elevation-input {
+    max-width: 110px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    color: white;
+}
+
+.elevation-unit {
+    color: #61dafb;
+    font-weight: 600;
+}
+
+.elevation-hint,
+.sidebar-hotkey-hint {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.62);
+    line-height: 1.45;
+}
+
+.flyover-item {
+    overflow: hidden;
+}
+
+@media (max-width: 1200px) {
+    .sidebar-left,
+    .sidebar-right {
+        width: min(320px, calc(100vw - 32px));
+    }
+}
+
+@media (max-width: 980px) {
+    .sidebar-left,
+    .sidebar-right {
+        position: static;
+        width: auto;
+        max-height: none;
+        margin: 12px;
+    }
+}

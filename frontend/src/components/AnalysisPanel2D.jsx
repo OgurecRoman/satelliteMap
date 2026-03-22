@@ -1,9 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { formatTimestamp } from '../utils/time';
 
 const DEFAULT_REGION = { min_lat: 50, min_lon: 30, max_lat: 60, max_lon: 40 };
-const DEFAULT_GROUP_A = { name: 'Группа A', country: '', operator: '', orbit_type: 'LEO', purpose: '' };
-const DEFAULT_GROUP_B = { name: 'Группа B', country: '', operator: '', orbit_type: '', purpose: 'Earth observation' };
+const DEFAULT_GROUP_A = { name: 'Группа A', country: '', operator: '', orbit_type: '', purpose: '' };
+const DEFAULT_GROUP_B = { name: 'Группа B', country: '', operator: '', orbit_type: '', purpose: '' };
+const MAX_GROUP_NAME_LENGTH = 32;
+
+const fieldStyle = {
+  width: '100%',
+  padding: '6px',
+  borderRadius: '6px',
+  background: 'rgba(255,255,255,0.1)',
+  border: '1px solid rgba(255,255,255,0.2)',
+  color: 'white',
+};
 
 export default function AnalysisPanel2D({
   currentTime,
@@ -26,26 +36,29 @@ export default function AnalysisPanel2D({
   const [localError, setLocalError] = useState('');
 
   useEffect(() => {
-    if (selectedPoint && selectedPoint.lat !== undefined && selectedPoint.lon !== undefined) {
+    const lon = typeof selectedPoint?.lon === 'number' ? selectedPoint.lon : selectedPoint?.lng;
+    if (selectedPoint && selectedPoint.lat !== undefined && lon !== undefined) {
       setPointForm((prev) => ({
         ...prev,
         lat: Number(selectedPoint.lat.toFixed(4)),
-        lon: Number(selectedPoint.lon.toFixed(4)),
+        lon: Number(lon.toFixed(4)),
       }));
     }
   }, [selectedPoint]);
 
-  // Валидация координат
   const validateCoordinates = (lat, lon) => {
-    if (lat < -90 || lat > 90) return 'Широта должна быть в диапазоне от -90 до 90';
-    if (lon < -180 || lon > 180) return 'Долгота должна быть в диапазоне от -180 до 180';
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) return 'Широта должна быть в диапазоне от -90 до 90.';
+    if (!Number.isFinite(lon) || lon < -180 || lon > 180) return 'Долгота должна быть в диапазоне от -180 до 180.';
     return null;
   };
 
-  // Валидация региона
   const validateRegion = (minLat, maxLat, minLon, maxLon) => {
-    if (minLat < -90 || maxLat > 90 || minLat > maxLat) return 'Некорректные границы широты';
-    if (minLon < -180 || maxLon > 180 || minLon > maxLon) return 'Некорректные границы долготы';
+    if (!Number.isFinite(minLat) || !Number.isFinite(maxLat) || minLat < -90 || maxLat > 90 || minLat >= maxLat) {
+      return 'Некорректные границы широты.';
+    }
+    if (!Number.isFinite(minLon) || !Number.isFinite(maxLon) || minLon < -180 || maxLon > 180 || minLon >= maxLon) {
+      return 'Некорректные границы долготы.';
+    }
     return null;
   };
 
@@ -58,6 +71,16 @@ export default function AnalysisPanel2D({
     }).filter(([, value]) => value)
   );
 
+  const normalizeGroupName = (value, fallback) => {
+    const normalized = String(value || '').trim().slice(0, MAX_GROUP_NAME_LENGTH);
+    return normalized || fallback;
+  };
+
+  const truncateText = (value, maxLength = MAX_GROUP_NAME_LENGTH) => {
+    if (!value || value.length <= maxLength) return value;
+    return `${value.slice(0, maxLength - 3).trimEnd()}...`;
+  };
+
   const submitPointAnalysis = () => {
     setLocalError('');
 
@@ -66,20 +89,19 @@ export default function AnalysisPanel2D({
     const horizon = Number(pointForm.horizon_hours);
     const step = Number(pointForm.step_seconds);
 
-    // Валидация
     const coordError = validateCoordinates(lat, lon);
     if (coordError) {
       setLocalError(coordError);
       return;
     }
 
-    if (isNaN(horizon) || horizon <= 0 || horizon > 72) {
-      setLocalError('Горизонт должен быть от 1 до 72 часов');
+    if (!Number.isInteger(horizon) || horizon <= 0 || horizon > 72) {
+      setLocalError('Горизонт должен быть целым числом от 1 до 72 часов.');
       return;
     }
 
-    if (isNaN(step) || step < 30 || step > 3600) {
-      setLocalError('Шаг должен быть от 30 до 3600 секунд');
+    if (!Number.isInteger(step) || step < 30 || step > 3600) {
+      setLocalError('Шаг должен быть целым числом от 30 до 3600 секунд.');
       return;
     }
 
@@ -109,13 +131,13 @@ export default function AnalysisPanel2D({
       return;
     }
 
-    if (isNaN(horizon) || horizon <= 0 || horizon > 72) {
-      setLocalError('Горизонт должен быть от 1 до 72 часов');
+    if (!Number.isInteger(horizon) || horizon <= 0 || horizon > 72) {
+      setLocalError('Горизонт должен быть целым числом от 1 до 72 часов.');
       return;
     }
 
-    if (isNaN(step) || step < 30 || step > 3600) {
-      setLocalError('Шаг должен быть от 30 до 3600 секунд');
+    if (!Number.isInteger(step) || step < 30 || step > 3600) {
+      setLocalError('Шаг должен быть целым числом от 30 до 3600 секунд.');
       return;
     }
 
@@ -137,18 +159,15 @@ export default function AnalysisPanel2D({
   const submitCompareGroups = () => {
     setLocalError('');
 
-    if (!groupA.name && !groupB.name) {
-      setLocalError('Укажите названия групп');
-      return;
-    }
-
     onRunCompareGroups({
       groups: [
-        { name: groupA.name || 'Группа A', filters: buildFilters(groupA) },
-        { name: groupB.name || 'Группа B', filters: buildFilters(groupB) },
+        { name: normalizeGroupName(groupA.name, 'Группа A'), filters: buildFilters(groupA) },
+        { name: normalizeGroupName(groupB.name, 'Группа B'), filters: buildFilters(groupB) },
       ],
     });
   };
+
+  const safeCompareGroups = Array.isArray(results?.compare?.groups) ? results.compare.groups : [];
 
   return (
     <div className="analysis-panel" style={{ marginTop: '16px' }}>
@@ -158,32 +177,30 @@ export default function AnalysisPanel2D({
         <button onClick={() => { setActiveTab('compare'); setLocalError(''); }} className={`tab-btn ${activeTab === 'compare' ? 'active' : ''}`}>⚖️ Сравнение</button>
       </div>
 
-      {/* Ошибки */}
       {(error || localError) && (
         <div style={{ color: '#ffaa66', fontSize: '0.8rem', marginBottom: '12px', padding: '8px', background: 'rgba(255,170,102,0.1)', borderRadius: '8px' }}>
           {error || localError}
         </div>
       )}
 
-      {/* Анализ по точке */}
       {activeTab === 'point' && (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
             <div>
               <label style={{ fontSize: '0.7rem', color: '#aaa' }}>Широта (-90..90)</label>
-              <input type="number" step="any" value={pointForm.lat} onChange={(e) => setPointForm({ ...pointForm, lat: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} />
+              <input type="number" min="-90" max="90" step="any" value={pointForm.lat} onChange={(e) => setPointForm({ ...pointForm, lat: e.target.value })} style={fieldStyle} />
             </div>
             <div>
               <label style={{ fontSize: '0.7rem', color: '#aaa' }}>Долгота (-180..180)</label>
-              <input type="number" step="any" value={pointForm.lon} onChange={(e) => setPointForm({ ...pointForm, lon: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} />
+              <input type="number" min="-180" max="180" step="any" value={pointForm.lon} onChange={(e) => setPointForm({ ...pointForm, lon: e.target.value })} style={fieldStyle} />
             </div>
             <div>
               <label style={{ fontSize: '0.7rem', color: '#aaa' }}>Горизонт (1-72 ч)</label>
-              <input type="number" value={pointForm.horizon_hours} onChange={(e) => setPointForm({ ...pointForm, horizon_hours: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} />
+              <input type="number" min="1" max="72" value={pointForm.horizon_hours} onChange={(e) => setPointForm({ ...pointForm, horizon_hours: e.target.value })} style={fieldStyle} />
             </div>
             <div>
               <label style={{ fontSize: '0.7rem', color: '#aaa' }}>Шаг (30-3600 сек)</label>
-              <input type="number" value={pointForm.step_seconds} onChange={(e) => setPointForm({ ...pointForm, step_seconds: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} />
+              <input type="number" min="30" max="3600" value={pointForm.step_seconds} onChange={(e) => setPointForm({ ...pointForm, step_seconds: e.target.value })} style={fieldStyle} />
             </div>
           </div>
           <button onClick={submitPointAnalysis} style={{ width: '100%', padding: '8px', background: '#61dafb', border: 'none', borderRadius: '8px', color: '#1a1a2e', fontWeight: 'bold', cursor: 'pointer' }} disabled={loading}>
@@ -194,7 +211,7 @@ export default function AnalysisPanel2D({
               <div style={{ fontSize: '0.7rem', color: '#61dafb', marginBottom: '8px' }}>Найдено: {results.point.matches?.length || 0}</div>
               {results.point.matches?.slice(0, 5).map((item, idx) => (
                 <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '8px', marginBottom: '6px', fontSize: '0.7rem' }}>
-                  <strong>{item.satellite?.name}</strong>
+                  <strong style={{ display: 'block', overflowWrap: 'anywhere' }}>{item.satellite?.name}</strong>
                   <div>🕐 {item.next_pass?.enter_time ? formatTimestamp(item.next_pass.enter_time) : '—'}</div>
                   <div>📏 {item.next_pass?.min_distance_km ? Math.round(item.next_pass.min_distance_km) : '—'} км</div>
                 </div>
@@ -204,14 +221,13 @@ export default function AnalysisPanel2D({
         </div>
       )}
 
-      {/* Анализ по региону */}
       {activeTab === 'region' && (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-            <div><label style={{ fontSize: '0.7rem', color: '#aaa' }}>Широта (-90..90)</label><input type="number" step="any" value={regionForm.min_lat} onChange={(e) => setRegionForm({ ...regionForm, min_lat: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} /></div>
-            <div><label style={{ fontSize: '0.7rem', color: '#aaa' }}>Широта (-90..90)</label><input type="number" step="any" value={regionForm.max_lat} onChange={(e) => setRegionForm({ ...regionForm, max_lat: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} /></div>
-            <div><label style={{ fontSize: '0.7rem', color: '#aaa' }}>Долгота (-180..180)</label><input type="number" step="any" value={regionForm.min_lon} onChange={(e) => setRegionForm({ ...regionForm, min_lon: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} /></div>
-            <div><label style={{ fontSize: '0.7rem', color: '#aaa' }}>Долгота (-180..180)</label><input type="number" step="any" value={regionForm.max_lon} onChange={(e) => setRegionForm({ ...regionForm, max_lon: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} /></div>
+            <div><label style={{ fontSize: '0.7rem', color: '#aaa' }}>Мин. широта</label><input type="number" step="any" value={regionForm.min_lat} onChange={(e) => setRegionForm({ ...regionForm, min_lat: e.target.value })} style={fieldStyle} /></div>
+            <div><label style={{ fontSize: '0.7rem', color: '#aaa' }}>Макс. широта</label><input type="number" step="any" value={regionForm.max_lat} onChange={(e) => setRegionForm({ ...regionForm, max_lat: e.target.value })} style={fieldStyle} /></div>
+            <div><label style={{ fontSize: '0.7rem', color: '#aaa' }}>Мин. долгота</label><input type="number" step="any" value={regionForm.min_lon} onChange={(e) => setRegionForm({ ...regionForm, min_lon: e.target.value })} style={fieldStyle} /></div>
+            <div><label style={{ fontSize: '0.7rem', color: '#aaa' }}>Макс. долгота</label><input type="number" step="any" value={regionForm.max_lon} onChange={(e) => setRegionForm({ ...regionForm, max_lon: e.target.value })} style={fieldStyle} /></div>
           </div>
           <button onClick={submitRegionAnalysis} style={{ width: '100%', padding: '8px', background: '#61dafb', border: 'none', borderRadius: '8px', color: '#1a1a2e', fontWeight: 'bold', cursor: 'pointer' }} disabled={loading}>
             {loading ? 'Анализ...' : 'Запустить анализ региона'}
@@ -224,52 +240,63 @@ export default function AnalysisPanel2D({
         </div>
       )}
 
-      {/* Сравнение группировок */}
       {activeTab === 'compare' && (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px' }}>
-              <h4 style={{ margin: '0 0 8px 0', fontSize: '0.85rem' }}>Группа A</h4>
-              <input type="text" placeholder="Название" value={groupA.name} onChange={(e) => setGroupA({ ...groupA, name: e.target.value })} style={{ width: '100%', padding: '4px', marginBottom: '6px', fontSize: '0.7rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', borderRadius: '4px' }} />
-              <select value={groupA.country} onChange={(e) => setGroupA({ ...groupA, country: e.target.value })} style={{ width: '100%', padding: '4px', marginBottom: '4px', fontSize: '0.7rem' }}>
-                <option value="">Страна</option>
-                {(filterOptions.countries || []).map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={groupA.orbit_type} onChange={(e) => setGroupA({ ...groupA, orbit_type: e.target.value })} style={{ width: '100%', padding: '4px', fontSize: '0.7rem' }}>
-                <option value="">Тип орбиты</option>
-                {(filterOptions.orbit_types || []).map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px' }}>
-              <h4 style={{ margin: '0 0 8px 0', fontSize: '0.85rem' }}>Группа B</h4>
-              <input type="text" placeholder="Название" value={groupB.name} onChange={(e) => setGroupB({ ...groupB, name: e.target.value })} style={{ width: '100%', padding: '4px', marginBottom: '6px', fontSize: '0.7rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', borderRadius: '4px' }} />
-              <select value={groupB.country} onChange={(e) => setGroupB({ ...groupB, country: e.target.value })} style={{ width: '100%', padding: '4px', marginBottom: '4px', fontSize: '0.7rem' }}>
-                <option value="">Страна</option>
-                {(filterOptions.countries || []).map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={groupB.orbit_type} onChange={(e) => setGroupB({ ...groupB, orbit_type: e.target.value })} style={{ width: '100%', padding: '4px', fontSize: '0.7rem' }}>
-                <option value="">Тип орбиты</option>
-                {(filterOptions.orbit_types || []).map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
+            <GroupEditor title="Группа A" value={groupA} onChange={setGroupA} filterOptions={filterOptions} />
+            <GroupEditor title="Группа B" value={groupB} onChange={setGroupB} filterOptions={filterOptions} />
           </div>
           <button onClick={submitCompareGroups} style={{ width: '100%', padding: '8px', background: '#61dafb', border: 'none', borderRadius: '8px', color: '#1a1a2e', fontWeight: 'bold', cursor: 'pointer' }} disabled={loading}>
             {loading ? 'Сравнение...' : 'Сравнить группировки'}
           </button>
-          {results.compare && !loading && (
+          {safeCompareGroups.length > 0 && !loading && (
             <div style={{ marginTop: '12px' }}>
-              {results.compare.groups?.map((group, idx) => (
-                <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '8px', marginBottom: '6px' }}>
-                  <strong>{group.name}</strong>
-                  <div>📊 {group.count} спутников</div>
-                  <div>📏 Высота: {Math.round(group.avg_altitude_km)} км</div>
-                  <div>⏱️ Период: {Math.round(group.avg_period_minutes)} мин</div>
+              {safeCompareGroups.map((group, idx) => (
+                <div key={`${group.name}-${idx}`} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '8px', marginBottom: '6px', display: 'grid', gap: '4px' }}>
+                  <strong title={group.name} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{truncateText(group.name)}</strong>
+                  <div style={{ fontSize: '0.72rem', color: '#dbeafe' }}>📊 {Number.isFinite(group.count) ? group.count : 0} спутников</div>
+                  <div style={{ fontSize: '0.7rem', color: '#cbd5e1' }}>📏 Высота: {Number.isFinite(group.avg_altitude_km) ? Math.round(group.avg_altitude_km) : '—'} км</div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>⏱️ Период: {Number.isFinite(group.avg_period_minutes) ? Math.round(group.avg_period_minutes) : '—'} мин</div>
                 </div>
               ))}
             </div>
           )}
+          {!loading && results.compare && safeCompareGroups.length === 0 && (
+            <div style={{ marginTop: '12px', fontSize: '0.75rem', color: '#94a3b8' }}>Сравнение выполнено, но группировки не вернули данных.</div>
+          )}
+          <div style={{ marginTop: '8px', fontSize: '0.7rem', color: 'rgba(255,255,255,0.55)' }}>
+            Названия групп ограничены {MAX_GROUP_NAME_LENGTH} символами. Выбранный спутник: {selectedSatelliteId || 'любой'}.
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function GroupEditor({ title, value, onChange, filterOptions }) {
+  const update = (key, nextValue) => onChange((prev) => ({ ...prev, [key]: key === 'name' ? String(nextValue).slice(0, MAX_GROUP_NAME_LENGTH) : nextValue }));
+
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px', minWidth: 0 }}>
+      <h4 style={{ margin: '0 0 8px 0', fontSize: '0.85rem' }}>{title}</h4>
+      <input type="text" maxLength={MAX_GROUP_NAME_LENGTH} placeholder="Название" value={value.name} onChange={(e) => update('name', e.target.value)} style={{ ...fieldStyle, marginBottom: '6px', fontSize: '0.7rem' }} />
+      <select value={value.country} onChange={(e) => update('country', e.target.value)} style={{ ...fieldStyle, marginBottom: '4px', fontSize: '0.7rem' }}>
+        <option value="">Страна</option>
+        {(filterOptions.countries || []).map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <select value={value.operator} onChange={(e) => update('operator', e.target.value)} style={{ ...fieldStyle, marginBottom: '4px', fontSize: '0.7rem' }}>
+        <option value="">Оператор</option>
+        {(filterOptions.operators || []).map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+      <select value={value.orbit_type} onChange={(e) => update('orbit_type', e.target.value)} style={{ ...fieldStyle, marginBottom: '4px', fontSize: '0.7rem' }}>
+        <option value="">Тип орбиты</option>
+        {(filterOptions.orbit_types || []).map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+      <select value={value.purpose} onChange={(e) => update('purpose', e.target.value)} style={{ ...fieldStyle, fontSize: '0.7rem' }}>
+        <option value="">Назначение</option>
+        {(filterOptions.purposes || []).map((p) => <option key={p} value={p}>{p}</option>)}
+      </select>
+      <div style={{ marginTop: '6px', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)' }}>До {MAX_GROUP_NAME_LENGTH} символов</div>
     </div>
   );
 }

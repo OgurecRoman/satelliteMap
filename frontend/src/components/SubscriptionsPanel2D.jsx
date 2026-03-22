@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { formatTimestamp } from '../utils/time';
 
 export default function SubscriptionsPanel2D({
   subscriptions = [],  // ← значение по умолчанию
