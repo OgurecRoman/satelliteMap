@@ -1,0 +1,24 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SATELLITEMAP_HOST }}
+          username: ${{ secrets.SATELLITEMAP_USER }}
+          port: 22
+          key: ${{ secrets.SATELLITEMAP_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd /opt/satelliteMap
+            ./deploy.sh

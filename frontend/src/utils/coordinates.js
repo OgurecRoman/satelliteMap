@@ -106,9 +106,23 @@ export function horizonAngularRadiusDeg(altKm = 0) {
   return THREE.MathUtils.radToDeg(Math.acos(ratio));
 }
 
-export function footprintAngularRadiusDeg(altKm = 0, kind = 'visibility') {
-  const visibility = horizonAngularRadiusDeg(altKm);
-  return kind === 'coverage' ? visibility * 0.75 : visibility;
+export function minElevationAngularRadiusDeg(altKm = 0, minElevationDeg = 15) {
+  const altitudeKm = Math.max(0, altKm);
+  const elevationRad = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(minElevationDeg, 0, 89));
+  const ratio = THREE.MathUtils.clamp((EARTH_RADIUS_KM / (EARTH_RADIUS_KM + altitudeKm)) * Math.cos(elevationRad), -1, 1);
+  const centralAngleRad = Math.max(0, Math.acos(ratio) - elevationRad);
+  return THREE.MathUtils.radToDeg(centralAngleRad);
+}
+
+export function footprintAngularRadiusDeg(altKm = 0, kind = 'visibility', minElevationDeg = 15) {
+  if (kind === 'min_elevation') {
+    return minElevationAngularRadiusDeg(altKm, minElevationDeg);
+  }
+  return horizonAngularRadiusDeg(altKm);
+}
+
+export function surfaceRadiusKmFromAngularRadiusDeg(angularRadiusDeg = 0) {
+  return Number.isFinite(angularRadiusDeg) ? EARTH_RADIUS_KM * THREE.MathUtils.degToRad(Math.max(0, angularRadiusDeg)) : null;
 }
 
 function normalizeLongitude(lon) {

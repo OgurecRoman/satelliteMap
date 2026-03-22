@@ -3,8 +3,12 @@ import { formatCoordinate } from '../../utils/coordinates';
 import { formatTimestamp } from '../../utils/time';
 
 const DEFAULT_REGION = { min_lat: 50, min_lon: 30, max_lat: 60, max_lon: 40 };
-const DEFAULT_GROUP_A = { name: 'Группа A', country: '', operator: '', orbit_type: 'LEO', purpose: '' };
-const DEFAULT_GROUP_B = { name: 'Группа B', country: '', operator: '', orbit_type: '', purpose: 'Earth observation' };
+const DEFAULT_GROUP_A = { name: 'Группа A', country: '', operator: '', orbit_type: '', purpose: '' };
+const DEFAULT_GROUP_B = { name: 'Группа B', country: '', operator: '', orbit_type: '', purpose: '' };
+const MAX_GROUP_NAME_LENGTH = 32;
+const MAX_ANALYSIS_HORIZON_HOURS = 168;
+const MIN_ANALYSIS_STEP_SECONDS = 10;
+const MAX_ANALYSIS_STEP_SECONDS = 3600;
 
 export default function AnalysisPanel({
   currentTime,
@@ -33,6 +37,7 @@ export default function AnalysisPanel({
     horizon_hours: 6,
     step_seconds: 600,
   });
+  const [localError, setLocalError] = useState('');
 
   useEffect(() => {
     if (selectedPoint) {
@@ -45,6 +50,7 @@ export default function AnalysisPanel({
   }, [selectedPoint]);
 
   const pointValues = { lat: pointForm.lat, lon: pointForm.lon };
+  const visibleError = localError || error;
 
   const buildFilters = (group) => Object.fromEntries(
     Object.entries({
@@ -55,7 +61,60 @@ export default function AnalysisPanel({
     }).filter(([, value]) => value)
   );
 
+  const validatePointForm = () => {
+    const lat = Number(pointValues.lat);
+    const lon = Number(pointValues.lon);
+    const horizonHours = Number(pointForm.horizon_hours);
+    const stepSeconds = Number(pointForm.step_seconds);
+
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+      return 'Широта должна быть в диапазоне от -90 до 90.';
+    }
+    if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
+      return 'Долгота должна быть в диапазоне от -180 до 180.';
+    }
+    if (!Number.isInteger(horizonHours) || horizonHours < 1 || horizonHours > MAX_ANALYSIS_HORIZON_HOURS) {
+      return `Горизонт анализа должен быть от 1 до ${MAX_ANALYSIS_HORIZON_HOURS} часов.`;
+    }
+    if (!Number.isInteger(stepSeconds) || stepSeconds < MIN_ANALYSIS_STEP_SECONDS || stepSeconds > MAX_ANALYSIS_STEP_SECONDS) {
+      return `Шаг анализа должен быть от ${MIN_ANALYSIS_STEP_SECONDS} до ${MAX_ANALYSIS_STEP_SECONDS} секунд.`;
+    }
+    return '';
+  };
+
+  const validateRegionForm = () => {
+    const minLat = Number(regionForm.min_lat);
+    const minLon = Number(regionForm.min_lon);
+    const maxLat = Number(regionForm.max_lat);
+    const maxLon = Number(regionForm.max_lon);
+    const horizonHours = Number(regionForm.horizon_hours);
+    const stepSeconds = Number(regionForm.step_seconds);
+
+    if (!Number.isFinite(minLat) || minLat < -90 || minLat > 90 || !Number.isFinite(maxLat) || maxLat < -90 || maxLat > 90) {
+      return 'Широта региона должна быть в диапазоне от -90 до 90.';
+    }
+    if (!Number.isFinite(minLon) || minLon < -180 || minLon > 180 || !Number.isFinite(maxLon) || maxLon < -180 || maxLon > 180) {
+      return 'Долгота региона должна быть в диапазоне от -180 до 180.';
+    }
+    if (maxLat <= minLat || maxLon <= minLon) {
+      return 'Максимальные координаты региона должны быть больше минимальных.';
+    }
+    if (!Number.isInteger(horizonHours) || horizonHours < 1 || horizonHours > MAX_ANALYSIS_HORIZON_HOURS) {
+      return `Горизонт анализа должен быть от 1 до ${MAX_ANALYSIS_HORIZON_HOURS} часов.`;
+    }
+    if (!Number.isInteger(stepSeconds) || stepSeconds < MIN_ANALYSIS_STEP_SECONDS || stepSeconds > MAX_ANALYSIS_STEP_SECONDS) {
+      return `Шаг анализа должен быть от ${MIN_ANALYSIS_STEP_SECONDS} до ${MAX_ANALYSIS_STEP_SECONDS} секунд.`;
+    }
+    return '';
+  };
+
   const submitPointAnalysis = () => {
+    const validationError = validatePointForm();
+    if (validationError) {
+      setLocalError(validationError);
+      return;
+    }
+    setLocalError('');
     onRunPointAnalysis({
       lat: Number(pointValues.lat),
       lon: Number(pointValues.lon),
@@ -67,6 +126,12 @@ export default function AnalysisPanel({
   };
 
   const submitRegionAnalysis = () => {
+    const validationError = validateRegionForm();
+    if (validationError) {
+      setLocalError(validationError);
+      return;
+    }
+    setLocalError('');
     onRunRegionAnalysis({
       region: {
         type: 'bbox',
@@ -83,15 +148,23 @@ export default function AnalysisPanel({
   };
 
   const submitCompareGroups = () => {
+    setLocalError('');
     onRunCompareGroups({
       groups: [
-        { name: groupA.name || 'Группа A', filters: buildFilters(groupA) },
-        { name: groupB.name || 'Группа B', filters: buildFilters(groupB) },
+        { name: normalizeGroupName(groupA.name, 'Группа A'), filters: buildFilters(groupA) },
+        { name: normalizeGroupName(groupB.name, 'Группа B'), filters: buildFilters(groupB) },
       ],
     });
   };
 
   const submitSubscription = () => {
+    const validationError = subscriptionForm.target_type === 'point' ? validatePointForm() : validateRegionForm();
+    if (validationError) {
+      setLocalError(validationError);
+      return;
+    }
+    setLocalError('');
+
     const payload = {
       name: subscriptionForm.name,
       target_type: subscriptionForm.target_type,
@@ -125,7 +198,7 @@ export default function AnalysisPanel({
         <h3>Аналитика и оповещения</h3>
         {loading ? <span className="status-pill">Выполняется…</span> : null}
       </div>
-      {error ? <div className="error-banner">{error}</div> : null}
+      {visibleError ? <div className="error-banner">{visibleError}</div> : null}
 
       <div className="stack-card">
         <h4>Анализ пролётов над точкой</h4>
@@ -133,19 +206,19 @@ export default function AnalysisPanel({
         <div className="field-grid two-columns">
           <div>
             <label className="field-label">Широта</label>
-            <input type="number" value={pointValues.lat} onChange={(event) => setPointForm((prev) => ({ ...prev, lat: event.target.value }))} />
+            <input type="number" min="-90" max="90" step="0.0001" value={pointValues.lat} onChange={(event) => setPointForm((prev) => ({ ...prev, lat: event.target.value }))} />
           </div>
           <div>
             <label className="field-label">Долгота</label>
-            <input type="number" value={pointValues.lon} onChange={(event) => setPointForm((prev) => ({ ...prev, lon: event.target.value }))} />
+            <input type="number" min="-180" max="180" step="0.0001" value={pointValues.lon} onChange={(event) => setPointForm((prev) => ({ ...prev, lon: event.target.value }))} />
           </div>
           <div>
             <label className="field-label">Горизонт, часов</label>
-            <input type="number" value={pointForm.horizon_hours} onChange={(event) => setPointForm((prev) => ({ ...prev, horizon_hours: event.target.value }))} />
+            <input type="number" min="1" max={MAX_ANALYSIS_HORIZON_HOURS} step="1" value={pointForm.horizon_hours} onChange={(event) => setPointForm((prev) => ({ ...prev, horizon_hours: event.target.value }))} />
           </div>
           <div>
             <label className="field-label">Шаг, сек</label>
-            <input type="number" value={pointForm.step_seconds} onChange={(event) => setPointForm((prev) => ({ ...prev, step_seconds: event.target.value }))} />
+            <input type="number" min={MIN_ANALYSIS_STEP_SECONDS} max={MAX_ANALYSIS_STEP_SECONDS} step="1" value={pointForm.step_seconds} onChange={(event) => setPointForm((prev) => ({ ...prev, step_seconds: event.target.value }))} />
           </div>
         </div>
         <button type="button" className="primary-button full-width" onClick={submitPointAnalysis}>Запустить анализ точки</button>
@@ -176,16 +249,16 @@ export default function AnalysisPanel({
           {Object.keys(DEFAULT_REGION).map((key) => (
             <div key={key}>
               <label className="field-label">{translateRegionField(key)}</label>
-              <input type="number" value={regionForm[key]} onChange={(event) => setRegionForm((prev) => ({ ...prev, [key]: event.target.value }))} />
+              <input type="number" min={key.includes('lat') ? '-90' : '-180'} max={key.includes('lat') ? '90' : '180'} step="0.0001" value={regionForm[key]} onChange={(event) => setRegionForm((prev) => ({ ...prev, [key]: event.target.value }))} />
             </div>
           ))}
           <div>
             <label className="field-label">Горизонт, часов</label>
-            <input type="number" value={regionForm.horizon_hours} onChange={(event) => setRegionForm((prev) => ({ ...prev, horizon_hours: event.target.value }))} />
+            <input type="number" min="1" max={MAX_ANALYSIS_HORIZON_HOURS} step="1" value={regionForm.horizon_hours} onChange={(event) => setRegionForm((prev) => ({ ...prev, horizon_hours: event.target.value }))} />
           </div>
           <div>
             <label className="field-label">Шаг, сек</label>
-            <input type="number" value={regionForm.step_seconds} onChange={(event) => setRegionForm((prev) => ({ ...prev, step_seconds: event.target.value }))} />
+            <input type="number" min={MIN_ANALYSIS_STEP_SECONDS} max={MAX_ANALYSIS_STEP_SECONDS} step="1" value={regionForm.step_seconds} onChange={(event) => setRegionForm((prev) => ({ ...prev, step_seconds: event.target.value }))} />
           </div>
         </div>
         <button type="button" className="secondary-button full-width" onClick={submitRegionAnalysis}>Запустить анализ региона</button>
@@ -202,12 +275,12 @@ export default function AnalysisPanel({
         {results.compare ? (
           <div className="result-list">
             {results.compare.groups.map((group) => (
-              <div key={group.name} className="result-item compact">
-                <div>
-                  <strong>{group.name}</strong>
+              <div key={group.name} className="result-item compare-result-item">
+                <div className="truncate-container">
+                  <strong className="truncate-text" title={group.name}>{truncateText(group.name)}</strong>
                   <p>{group.count} спутников</p>
                 </div>
-                <div>
+                <div className="compare-result-metrics">
                   <p>Средняя высота {formatCoordinate(group.avg_altitude_km)} км</p>
                   <p className="muted-text">Средний период {formatCoordinate(group.avg_period_minutes)} мин</p>
                 </div>
@@ -272,7 +345,7 @@ function GroupEditor({ title, value, onChange, filterOptions }) {
     <div className="info-card compact-card">
       <h5>{title}</h5>
       <label className="field-label">Название</label>
-      <input type="text" value={value.name} onChange={(event) => update('name', event.target.value)} />
+      <input type="text" maxLength={MAX_GROUP_NAME_LENGTH} value={value.name} onChange={(event) => update('name', event.target.value)} />
       <label className="field-label">Страна</label>
       <select value={value.country} onChange={(event) => update('country', event.target.value)}>
         <option value="">Любая</option>
@@ -293,8 +366,21 @@ function GroupEditor({ title, value, onChange, filterOptions }) {
         <option value="">Любое</option>
         {(filterOptions.purposes || []).map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
+      <p className="muted-text">До {MAX_GROUP_NAME_LENGTH} символов.</p>
     </div>
   );
+}
+
+function normalizeGroupName(value, fallback) {
+  const normalized = (value || '').trim();
+  return normalized || fallback;
+}
+
+function truncateText(value, maxLength = 32) {
+  if (!value || value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
 function translateRegionField(field) {

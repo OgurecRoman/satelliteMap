@@ -10,7 +10,6 @@ import AnalysisPanel from './components/panels/AnalysisPanel';
 import useSimulationClock from './hooks/useSimulationClock';
 import {
   getSatelliteCard,
-  getSatelliteCoverage,
   getSatelliteFilters,
   getSatellitePositions,
   getSatelliteTrack,
@@ -18,6 +17,7 @@ import {
 } from './api/satellites';
 import { runCompareGroups, runPointPassAnalysis, runRegionPassAnalysis } from './api/analysis';
 import { createSubscription, listSubscriptions } from './api/notifications';
+import { footprintAngularRadiusDeg, surfaceRadiusKmFromAngularRadiusDeg } from './utils/coordinates';
 
 const INITIAL_FILTERS = { country: '', operator: '', orbit_type: '', purpose: '', search: '' };
 const POSITION_REFRESH_SIM_MS = 90 * 1000;
@@ -34,6 +34,13 @@ function formatApiError(error, fallbackMessage) {
 
 function App() {
   const [activeView, setActiveView] = useState('2d');
+  const [fancyMode, setFancyMode] = useState(() => {
+    if (typeof window === 'undefined') return String(process.env.REACT_APP_FANCY || '').toLowerCase() === 'true';
+    const savedValue = window.localStorage.getItem('satellite-fancy-mode');
+    if (savedValue === 'true') return true;
+    if (savedValue === 'false') return false;
+    return String(process.env.REACT_APP_FANCY || '').toLowerCase() === 'true';
+  });
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [filterOptions, setFilterOptions] = useState({ countries: [], operators: [], orbit_types: [], purposes: [] });
   const [positions, setPositions] = useState([]);
@@ -42,7 +49,7 @@ function App() {
   const [satelliteCard, setSatelliteCard] = useState(null);
   const [track, setTrack] = useState(null);
   const [visibilityFootprint, setVisibilityFootprint] = useState(null);
-  const [coverageFootprint, setCoverageFootprint] = useState(null);
+  const [minElevationDeg, setMinElevationDeg] = useState(15);
   const [subscriptions, setSubscriptions] = useState([]);
   const [pointAnalysisResult, setPointAnalysisResult] = useState(null);
   const [regionAnalysisResult, setRegionAnalysisResult] = useState(null);
@@ -61,6 +68,12 @@ function App() {
   useEffect(() => {
     currentTimeRef.current = currentTime;
   }, [currentTime]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('satellite-fancy-mode', String(fancyMode));
+    }
+  }, [fancyMode]);
 
   useEffect(() => {
     let ignore = false;
@@ -139,18 +152,16 @@ function App() {
     const endTime = new Date(timestamp.getTime() + 90 * 60 * 1000);
 
     try {
-      const [cardData, trackData, visibilityData, coverageData] = await Promise.all([
+      const [cardData, trackData, visibilityData] = await Promise.all([
         getSatelliteCard(selectedSatelliteId, { timestamp: timestamp.toISOString(), ...pointParams }),
         getSatelliteTrack(selectedSatelliteId, { start_time: startTime.toISOString(), end_time: endTime.toISOString(), step_seconds: 60 }),
         getSatelliteVisibility(selectedSatelliteId, { timestamp: timestamp.toISOString() }),
-        getSatelliteCoverage(selectedSatelliteId, { timestamp: timestamp.toISOString() }),
       ]);
 
       if (cardRequestIdRef.current !== requestId) return;
       setSatelliteCard(cardData);
       setTrack(trackData);
       setVisibilityFootprint(visibilityData);
-      setCoverageFootprint(coverageData);
       setLastCardFetchTime(new Date(timestamp));
     } catch (error) {
       if (cardRequestIdRef.current !== requestId) return;
@@ -167,7 +178,6 @@ function App() {
       setSatelliteCard(null);
       setTrack(null);
       setVisibilityFootprint(null);
-      setCoverageFootprint(null);
       setErrorState((prev) => ({ ...prev, card: '' }));
       setLastCardFetchTime(null);
       return;
@@ -203,6 +213,21 @@ function App() {
   }, [satellitesFor3D, selectedSatelliteId]);
 
   const selectedSatelliteVisual = selectedSatellitePreview || satelliteCard?.current_position || null;
+
+  const elevationFootprint = useMemo(() => {
+    const altitudeKm = selectedSatelliteVisual?.geodetic?.alt_km;
+    const angularRadiusDeg = Number.isFinite(altitudeKm)
+      ? footprintAngularRadiusDeg(altitudeKm, 'min_elevation', minElevationDeg)
+      : null;
+
+    return {
+      type: 'min_elevation',
+      min_elevation_deg: minElevationDeg,
+      angular_radius_deg: angularRadiusDeg,
+      surface_radius_km: surfaceRadiusKmFromAngularRadiusDeg(angularRadiusDeg),
+    };
+  }, [minElevationDeg, selectedSatelliteVisual]);
+
 
   useEffect(() => {
     if (!selectedSatelliteId) return;
@@ -270,7 +295,7 @@ function App() {
         <div className="brand-block">
           <div className="brand-mark">🛰️</div>
           <div>
-            <p className="eyebrow">Хакатон MVP</p>
+            <p className="eyebrow">Кодим сУтками</p>
             <h1>Платформа мониторинга пролётов спутников</h1>
           </div>
         </div>
@@ -300,21 +325,55 @@ function App() {
               selectedPoint={selectedPoint}
               track={track}
               visibilityFootprint={visibilityFootprint}
-              coverageFootprint={coverageFootprint}
+              elevationFootprint={elevationFootprint}
+              minElevationDeg={minElevationDeg}
+              fancyMode={fancyMode}
             />
             <aside className="side-panel left-panel">
               <TimeControls currentTime={currentTime} setCurrentTime={setCurrentTime} isPlaying={isPlaying} togglePlayback={togglePlayback} speedMultiplier={speedMultiplier} setSpeedMultiplier={setSpeedMultiplier} resetToNow={resetToNow} />
+              <section className="panel-section">
+                <div className="section-header">
+                  <h3>Параметры 3D</h3>
+                </div>
+                <div className="stack-card settings-stack">
+                  <label className="field-group">
+                    <span className="field-label">Рабочий угол места, °</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="45"
+                      step="1"
+                      value={minElevationDeg}
+                      onChange={(event) => setMinElevationDeg(Math.max(0, Math.min(45, Number(event.target.value) || 0)))}
+                    />
+                  </label>
+                  <p className="muted-text">0° — геометрическая видимость над горизонтом. Обычно для устойчивой связи используют 10–15° и выше.</p>
+                  <label className="fancy-toggle" htmlFor="fancy-mode-toggle">
+                    <input
+                      id="fancy-mode-toggle"
+                      type="checkbox"
+                      checked={fancyMode}
+                      onChange={(event) => setFancyMode(event.target.checked)}
+                    />
+                    <span className="fancy-toggle-slider" aria-hidden="true" />
+                    <span className="fancy-toggle-copy">
+                      <strong>Fancy режим</strong>
+                      <small>{fancyMode ? 'Красивые 3D-сферы' : 'Быстрый рендер'}</small>
+                    </span>
+                  </label>
+                </div>
+              </section>
               <FiltersPanel filters={filters} onFiltersChange={setFilters} filterOptions={filterOptions} positionsCount={satellitesFor3D.length} />
               <SatellitePickerPanel satellites={satellitesFor3D} selectedSatelliteId={selectedSatelliteId} onSelectSatellite={setSelectedSatelliteId} />
             </aside>
             <aside className="side-panel right-panel">
-              <SatelliteDetailsPanel satelliteCard={satelliteCard} selectedPoint={selectedPoint} selectedSatellitePreview={selectedSatellitePreview} track={track} visibilityFootprint={visibilityFootprint} coverageFootprint={coverageFootprint} loading={loadingState.card} error={errorState.card} />
+              <SatelliteDetailsPanel satelliteCard={satelliteCard} selectedPoint={selectedPoint} selectedSatellitePreview={selectedSatellitePreview} track={track} visibilityFootprint={visibilityFootprint} elevationFootprint={elevationFootprint} minElevationDeg={minElevationDeg} loading={loadingState.card} error={errorState.card} />
               <AnalysisPanel currentTime={currentTime} selectedPoint={selectedPoint} selectedSatelliteId={selectedSatelliteId} activeFilters={sanitizeFilters(filters)} onRunPointAnalysis={runPointAnalysis} onRunRegionAnalysis={runRegionAnalysis} onRunCompareGroups={runGroupCompare} onCreateSubscription={handleCreateSubscription} subscriptions={subscriptions} filterOptions={filterOptions} results={{ point: pointAnalysisResult, region: regionAnalysisResult, compare: compareResult }} loading={loadingState.analysis || loadingState.subscriptions} error={errorState.analysis} />
             </aside>
             <div className="floating-note bottom-note">
               <div>
                 <strong>3D-режим</strong>
-                <p>Оранжевая линия — трек, зелёная — радиовидимость, фиолетовая — покрытие. Сначала идёт выбор спутника, затем — постановка точки на Земле.</p>
+                <p>Оранжевая линия — трек, зелёная — геометрическая видимость спутника над горизонтом (0°), фиолетовая — видимость при рабочем угле места не ниже заданного порога.</p>
               </div>
               {loadingState.positions ? <span className="status-pill">Обновляем опорные позиции…</span> : null}
             </div>

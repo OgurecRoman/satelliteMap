@@ -14,9 +14,10 @@ import axios from 'axios';
 import Sidebar from './Sidebar';
 import {
     runPointPassAnalysis,
-    runRegionPassAnalysis
+    runRegionPassAnalysis,
+    runCompareGroups as requestCompareGroups
 } from '../api/analysis';
-import {listSubscriptions, createSubscription} from '../api/notifications';
+import {listSubscriptions} from '../api/notifications';
 
 const MapClickHandler = ({ onMapClick }) => {
     useMapEvents({
@@ -219,17 +220,16 @@ const SatelliteTracker = () => {
         }
     };
 
-    const runCompareGroups = async (payload) => {
+    const handleRunCompareGroups = async (payload) => {
         setLoadingAnalysis(true);
         setAnalysisError('');
         try {
-            // Добавляем таймаут 30 секунд
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Превышено время ожидания (30 сек)')), 30000)
             );
 
-            const apiPromise = runCompareGroups(payload);
-            const data = await Promise.race([apiPromise, timeoutPromise]);
+           const apiPromise = requestCompareGroups(payload);
+           const data = await Promise.race([apiPromise, timeoutPromise]);
             setAnalysisResults(prev => ({...prev, compare: data}));
         } catch (err) {
             console.error('Ошибка сравнения:', err);
@@ -561,7 +561,7 @@ const SatelliteTracker = () => {
                 analysisResults={analysisResults}
                 onRunPointAnalysis={runPointAnalysis}
                 onRunRegionAnalysis={runRegionAnalysis}
-                onRunCompareGroups={runCompareGroups}
+                onRunCompareGroups={handleRunCompareGroups}
                 loadingAnalysis={loadingAnalysis}
                 analysisError={analysisError}
             />

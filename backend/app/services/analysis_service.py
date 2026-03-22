@@ -29,6 +29,11 @@ from app.utils.time import ensure_utc
 
 class AnalysisService:
     ALLOWED_GROUP_FIELDS = {"country", "operator", "orbit_type", "purpose"}
+    MAX_ANALYSIS_PROPAGATIONS = 250_000
+    TOO_MANY_CALCULATIONS_MESSAGE = (
+        "Слишком много расчётов. Уменьшите горизонт анализа, увеличьте шаг или сузьте фильтры."
+    )
+    PROPAGATION_FAILURE_PREFIX = "TLE propagation failed"
 
     def __init__(self, session: Session):
         self.session = session
@@ -41,20 +46,28 @@ class AnalysisService:
         return GroupingResponse(field=field, groups=[GroupingBucket(value=value, count=count) for value, count in rows])
 
     def passes_over_point(self, request: PointPassRequest) -> PointPassResponse:
-        satellites = self.repo.list_all_filtered(**(request.filters.model_dump() if request.filters else {}))
+        filters = request.filters.model_dump() if request.filters else {}
+        self._ensure_request_is_affordable(filters, request.horizon_hours, request.step_seconds)
+
+        satellites = self.repo.list_all_filtered(**filters)
         matches: list[PointPassItem] = []
         for satellite in satellites:
             if not satellite.latest_tle:
                 continue
-            result = self._next_pass_for_satellite(
-                satellite.latest_tle.line1,
-                satellite.latest_tle.line2,
-                request.lat,
-                request.lon,
-                request.from_time,
-                request.horizon_hours,
-                request.step_seconds,
-            )
+            try:
+                result = self._next_pass_for_satellite(
+                    satellite.latest_tle.line1,
+                    satellite.latest_tle.line2,
+                    request.lat,
+                    request.lon,
+                    request.from_time,
+                    request.horizon_hours,
+                    request.step_seconds,
+                )
+            except BadRequestError as exc:
+                if self._is_propagation_failure(exc):
+                    continue
+                raise
             if result is not None:
                 matches.append(PointPassItem(satellite=SatelliteSummary.model_validate(satellite), next_pass=result))
         matches.sort(key=lambda item: item.next_pass.enter_time)
@@ -67,20 +80,28 @@ class AnalysisService:
         )
 
     def passes_over_region(self, request: RegionPassRequest) -> RegionPassResponse:
-        satellites = self.repo.list_all_filtered(**(request.filters.model_dump() if request.filters else {}))
+        filters = request.filters.model_dump() if request.filters else {}
+        self._ensure_request_is_affordable(filters, request.horizon_hours, request.step_seconds)
+
+        satellites = self.repo.list_all_filtered(**filters)
         matches: list[RegionPassItem] = []
         start = ensure_utc(request.from_time)
         end = start + timedelta(hours=request.horizon_hours)
         for satellite in satellites:
             if not satellite.latest_tle:
                 continue
-            states = PropagationService.ground_track(
-                satellite.latest_tle.line1,
-                satellite.latest_tle.line2,
-                start,
-                end,
-                request.step_seconds,
-            )
+            try:
+                states = PropagationService.ground_track(
+                    satellite.latest_tle.line1,
+                    satellite.latest_tle.line2,
+                    start,
+                    end,
+                    request.step_seconds,
+                )
+            except BadRequestError as exc:
+                if self._is_propagation_failure(exc):
+                    continue
+                raise
             windows: list[RegionPassWindow] = []
             current = None
             points_count = 0
@@ -102,7 +123,7 @@ class AnalysisService:
                     )
                     current = None
                     points_count = 0
-            if current is not None:
+            if current is not None and states:
                 windows.append(
                     RegionPassWindow(
                         enter_time=current,
@@ -147,6 +168,13 @@ class AnalysisService:
             )
         return CompareGroupsResponse(groups=result)
 
+    def _ensure_request_is_affordable(self, filters: dict, horizon_hours: int, step_seconds: int) -> None:
+        satellites_count = self.repo.count_filtered(**filters)
+        samples_per_satellite = int((horizon_hours * 3600) / step_seconds) + 1
+        estimated_propagations = satellites_count * samples_per_satellite
+        if estimated_propagations > self.MAX_ANALYSIS_PROPAGATIONS:
+            raise BadRequestError(self.TOO_MANY_CALCULATIONS_MESSAGE)
+
     def _next_pass_for_satellite(self, line1, line2, lat, lon, from_time, horizon_hours, step_seconds):
         start = ensure_utc(from_time)
         end = start + timedelta(hours=horizon_hours)
@@ -175,3 +203,6 @@ class AnalysisService:
         if current is not None:
             return PassWindow(**current)
         return None
+
+    def _is_propagation_failure(self, exc: BadRequestError) -> bool:
+        return isinstance(exc.detail, str) and exc.detail.startswith(self.PROPAGATION_FAILURE_PREFIX)
