@@ -180,7 +180,7 @@ const Sidebar = ({
                                 <button className={`speed-btn ${currentSpeed === 1 ? 'active' : ''}`} onClick={() => onSpeedChange(1)}>1x</button>
                                 <button className={`speed-btn ${currentSpeed === 5 ? 'active' : ''}`} onClick={() => onSpeedChange(5)}>5x</button>
                                 <button className={`speed-btn ${currentSpeed === 10 ? 'active' : ''}`} onClick={() => onSpeedChange(10)}>10x</button>
-                                <button className={`speed-btn ${currentSpeed === 100 ? 'active' : ''}`} onClick={() => onSpeedChange(100)}>100x</button>
+                                <button className={`speed-btn ${currentSpeed === 50 ? 'active' : ''}`} onClick={() => onSpeedChange(50)}>50x</button>
                             </div>
                         </div>
 
