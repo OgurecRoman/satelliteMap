@@ -8,12 +8,13 @@ import {
     Popup,
     TileLayer,
     ZoomControl,
+    useMap,
     useMapEvents,
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import axios from 'axios';
 import Sidebar from './Sidebar';
+import { getSatelliteCoverage, getSatellitePositions, getSatellites, getSatelliteTrack, getSatelliteVisibility } from '../api/satellites';
 import {
     runPointPassAnalysis,
     runRegionPassAnalysis,
@@ -26,6 +27,11 @@ import {
     surfaceRadiusKmFromAngularRadiusDeg,
 } from '../utils/coordinates';
 
+const FAST_POINT_RADIUS = 2.4;
+const FANCY_POINT_SIZE = 12;
+const FANCY_SPRITE_STEPS = 24;
+const MAX_SPEED_REQUEST_RATE_MS = 800;
+
 const MapClickHandler = ({ onMapClick }) => {
     useMapEvents({
         click: (e) => {
@@ -33,13 +39,6 @@ const MapClickHandler = ({ onMapClick }) => {
         },
     });
     return null;
-};
-
-const baseSatelliteIcon = {
-    iconUrl: '/satelite.png',
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
-    popupAnchor: [0, -12],
 };
 
 const normalizePoint = (point) => {
@@ -60,22 +59,6 @@ const polygonToLeafletPositions = (polygon) => {
         .map(([lon, lat]) => [lat, lon]);
 };
 
-const getRotatedIcon = (angle) => {
-    const rotationStyle = {
-        transform: `rotate(${angle}deg)`,
-        WebkitTransform: `rotate(${angle}deg)`,
-        MozTransform: `rotate(${angle}deg)`,
-    };
-
-    return L.divIcon({
-        html: `<img src="${baseSatelliteIcon.iconUrl}" style="width: ${baseSatelliteIcon.iconSize[0]}px; height: ${baseSatelliteIcon.iconSize[1]}px; ${Object.entries(rotationStyle).map(([k, v]) => `${k}:${v};`).join('')}" />`,
-        iconSize: baseSatelliteIcon.iconSize,
-        iconAnchor: baseSatelliteIcon.iconAnchor,
-        popupAnchor: baseSatelliteIcon.popupAnchor,
-        className: 'rotating-sat-icon',
-    });
-};
-
 const calculateBearingFromVelocity = (pos) => {
     if (!pos.velocity || typeof pos.velocity.vx === 'undefined' || typeof pos.velocity.vy === 'undefined') {
         return 0;
@@ -94,10 +77,228 @@ const calculateBearingFromVelocity = (pos) => {
     return bearingDeg;
 };
 
-const SatelliteTracker = () => {
+const quantizeAngleIndex = (angle) => {
+    const normalized = ((angle % 360) + 360) % 360;
+    return Math.round((normalized / 360) * FANCY_SPRITE_STEPS) % FANCY_SPRITE_STEPS;
+};
+
+const createFancySprites = (image, size) => {
+    return Array.from({ length: FANCY_SPRITE_STEPS }, (_, index) => {
+        const sprite = document.createElement('canvas');
+        sprite.width = size;
+        sprite.height = size;
+        const ctx = sprite.getContext('2d');
+        if (!ctx) return sprite;
+
+        ctx.translate(size / 2, size / 2);
+        ctx.rotate((index * 2 * Math.PI) / FANCY_SPRITE_STEPS);
+        ctx.drawImage(image, -size / 2, -size / 2, size, size);
+        return sprite;
+    });
+};
+
+const segmentTrajectory = (points) => {
+    if (!Array.isArray(points) || points.length < 2) return [];
+
+    const segments = [];
+    let currentSegment = [];
+
+    points.forEach((point) => {
+        if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return;
+
+        if (currentSegment.length === 0) {
+            currentSegment.push([point.lat, point.lon]);
+            return;
+        }
+
+        const prev = currentSegment[currentSegment.length - 1];
+        const lonJump = Math.abs(point.lon - prev[1]);
+        if (lonJump > 180) {
+            if (currentSegment.length > 1) {
+                segments.push(currentSegment);
+            }
+            currentSegment = [[point.lat, point.lon]];
+            return;
+        }
+
+        currentSegment.push([point.lat, point.lon]);
+    });
+
+    if (currentSegment.length > 1) {
+        segments.push(currentSegment);
+    }
+
+    return segments;
+};
+
+const buildPositionFilters = (filters) => ({
+    country: filters.country || undefined,
+    orbit_type: filters.orbitType || undefined,
+    purpose: filters.purpose || undefined,
+});
+
+const SatelliteCanvasLayer = ({ satellites, selectedSatelliteId, onSatelliteClick, fancyMode }) => {
+    const map = useMap();
+    const canvasRef = useRef(null);
+    const spriteCacheRef = useRef([]);
+    const imageReadyRef = useRef(false);
+    const hitTargetsRef = useRef([]);
+    const redrawRef = useRef(() => {});
+
+    useEffect(() => {
+        let disposed = false;
+        const image = new Image();
+        image.src = '/satelite.png';
+        image.onload = () => {
+            if (disposed) return;
+            spriteCacheRef.current = createFancySprites(image, FANCY_POINT_SIZE);
+            imageReadyRef.current = true;
+            redrawRef.current?.();
+        };
+        image.onerror = () => {
+            imageReadyRef.current = false;
+            spriteCacheRef.current = [];
+            redrawRef.current?.();
+        };
+        return () => {
+            disposed = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        const canvas = L.DomUtil.create('canvas', 'satellite-canvas-layer');
+        canvas.style.position = 'absolute';
+        canvas.style.pointerEvents = 'auto';
+        canvas.style.zIndex = '450';
+        canvasRef.current = canvas;
+        map.getPanes().overlayPane.appendChild(canvas);
+
+        const resizeCanvas = () => {
+            const size = map.getSize();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.max(1, Math.floor(size.x * dpr));
+            canvas.height = Math.max(1, Math.floor(size.y * dpr));
+            canvas.style.width = `${size.x}px`;
+            canvas.style.height = `${size.y}px`;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+        };
+
+        const redraw = () => {
+            if (!canvasRef.current) return;
+            resizeCanvas();
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const size = map.getSize();
+            const topLeft = map.containerPointToLayerPoint([0, 0]);
+            L.DomUtil.setPosition(canvas, topLeft);
+            ctx.clearRect(0, 0, size.x, size.y);
+
+            const nextHitTargets = [];
+
+            satellites.forEach((satellite) => {
+                const geodetic = satellite?.geodetic;
+                if (!geodetic || !Number.isFinite(geodetic.lat) || !Number.isFinite(geodetic.lon)) {
+                    return;
+                }
+
+                const point = map.latLngToLayerPoint([geodetic.lat, geodetic.lon]).subtract(topLeft);
+                if (point.x < -20 || point.y < -20 || point.x > size.x + 20 || point.y > size.y + 20) {
+                    return;
+                }
+
+                const isSelected = satellite.satellite_id === selectedSatelliteId;
+                const radius = fancyMode ? FANCY_POINT_SIZE / 2 : FAST_POINT_RADIUS + (isSelected ? 1.5 : 0);
+
+                if (fancyMode && imageReadyRef.current && spriteCacheRef.current.length) {
+                    const sprite = spriteCacheRef.current[quantizeAngleIndex(calculateBearingFromVelocity(satellite))];
+                    if (sprite) {
+                        ctx.save();
+                        if (isSelected) {
+                            ctx.beginPath();
+                            ctx.arc(point.x, point.y, 9, 0, Math.PI * 2);
+                            ctx.fillStyle = 'rgba(255, 196, 61, 0.22)';
+                            ctx.fill();
+                        }
+                        ctx.drawImage(sprite, point.x - FANCY_POINT_SIZE / 2, point.y - FANCY_POINT_SIZE / 2, FANCY_POINT_SIZE, FANCY_POINT_SIZE);
+                        ctx.restore();
+                    }
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+                    ctx.fillStyle = isSelected ? '#f59e0b' : '#61dafb';
+                    ctx.fill();
+                    if (isSelected) {
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+                        ctx.stroke();
+                    }
+                }
+
+                nextHitTargets.push({
+                    satelliteId: satellite.satellite_id,
+                    x: point.x,
+                    y: point.y,
+                    radius: Math.max(radius + 2, 6),
+                });
+            });
+
+            hitTargetsRef.current = nextHitTargets;
+        };
+
+        redrawRef.current = () => window.requestAnimationFrame(redraw);
+        redraw();
+
+        const handleMapRedraw = () => redrawRef.current();
+        const handleClick = (event) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            let matchedId = null;
+            let bestDistance = Number.POSITIVE_INFINITY;
+
+            for (let index = hitTargetsRef.current.length - 1; index >= 0; index -= 1) {
+                const target = hitTargetsRef.current[index];
+                const distance = Math.hypot(target.x - x, target.y - y);
+                if (distance <= target.radius && distance < bestDistance) {
+                    matchedId = target.satelliteId;
+                    bestDistance = distance;
+                }
+            }
+
+            if (matchedId != null) {
+                L.DomEvent.stop(event);
+                onSatelliteClick(matchedId);
+            }
+        };
+
+        map.on('move zoom zoomend resize viewreset', handleMapRedraw);
+        canvas.addEventListener('click', handleClick);
+
+        return () => {
+            canvas.removeEventListener('click', handleClick);
+            map.off('move zoom zoomend resize viewreset', handleMapRedraw);
+            if (canvas.parentNode) {
+                canvas.parentNode.removeChild(canvas);
+            }
+            canvasRef.current = null;
+        };
+    }, [map, onSatelliteClick, satellites, selectedSatelliteId, fancyMode]);
+
+    useEffect(() => {
+        redrawRef.current?.();
+    }, [satellites, selectedSatelliteId, fancyMode]);
+
+    return null;
+};
+
+const SatelliteTracker = ({ fancyMode = false, onFancyModeChange = () => {} }) => {
     const [satellitesPosition, setSatellitesPosition] = useState([]);
     const [satelliteMetadata, setSatelliteMetadata] = useState({});
-    const [filteredSatellites, setFilteredSatellites] = useState([]);
     const [filters, setFilters] = useState({
         country: '',
         orbitType: '',
@@ -126,6 +327,7 @@ const SatelliteTracker = () => {
     const [visibilityFootprint, setVisibilityFootprint] = useState(null);
     const [currentTrajectory, setCurrentTrajectory] = useState([]);
     const intervalRef = useRef(null);
+    const isFetchingPositionsRef = useRef(false);
 
     const selectedSatellitePosition = useMemo(
         () => satellitesPosition.find((sat) => sat.satellite_id === selectedSatelliteId) || null,
@@ -134,8 +336,23 @@ const SatelliteTracker = () => {
 
     const selectedSatelliteName = useMemo(() => {
         if (!selectedSatelliteId) return '';
-        return satelliteMetadata[selectedSatelliteId]?.name || `Спутник ${selectedSatelliteId}`;
-    }, [satelliteMetadata, selectedSatelliteId]);
+        return satelliteMetadata[selectedSatelliteId]?.name || selectedSatellitePosition?.satellite_name || `Спутник ${selectedSatelliteId}`;
+    }, [satelliteMetadata, selectedSatelliteId, selectedSatellitePosition]);
+
+    const selectedSatelliteInfo = useMemo(() => {
+        if (!selectedSatellitePosition) return null;
+        const meta = satelliteMetadata[selectedSatellitePosition.satellite_id];
+        const bearing = calculateBearingFromVelocity(selectedSatellitePosition);
+        return {
+            name: meta?.name || selectedSatellitePosition.satellite_name || `Спутник ${selectedSatellitePosition.satellite_id}`,
+            country: meta?.country || selectedSatellitePosition.country || 'Unknown',
+            operator: meta?.operator || selectedSatellitePosition.operator || 'Unknown',
+            orbit_type: meta?.orbit_type || selectedSatellitePosition.orbit_type || 'Unknown',
+            approx_altitude_km: meta?.approx_altitude_km ?? selectedSatellitePosition.geodetic?.alt_km ?? null,
+            period_minutes: meta?.period_minutes ?? selectedSatellitePosition.period_minutes ?? null,
+            bearing,
+        };
+    }, [satelliteMetadata, selectedSatellitePosition]);
 
     const workingFootprint = useMemo(() => {
         const geodetic = selectedSatellitePosition?.geodetic;
@@ -167,34 +384,78 @@ const SatelliteTracker = () => {
         [workingFootprint]
     );
 
+    const segmentedTrajectory = useMemo(() => segmentTrajectory(currentTrajectory), [currentTrajectory]);
+
+    const filteredSatellites = useMemo(() => {
+        let filtered = satellitesPosition;
+
+        if (filters.country) {
+            filtered = filtered.filter((pos) => {
+                const meta = satelliteMetadata[pos.satellite_id];
+                return (meta?.country || pos.country) === filters.country;
+            });
+        }
+        if (filters.orbitType) {
+            filtered = filtered.filter((pos) => {
+                const meta = satelliteMetadata[pos.satellite_id];
+                return (meta?.orbit_type || pos.orbit_type) === filters.orbitType;
+            });
+        }
+        if (filters.purpose) {
+            filtered = filtered.filter((pos) => {
+                const meta = satelliteMetadata[pos.satellite_id];
+                return (meta?.purpose || pos.purpose) === filters.purpose;
+            });
+        }
+
+        return filtered.filter((pos) => pos?.geodetic && Number.isFinite(pos.geodetic.lat) && Number.isFinite(pos.geodetic.lon));
+    }, [filters, satellitesPosition, satelliteMetadata]);
+
     const fetchMetadata = async () => {
         try {
-            const res = await axios.get('http://127.0.0.1:8000/api/v1/satellites');
             const metaMap = {};
-            res.data.items.forEach((item) => {
-                metaMap[item.id] = item;
-            });
+            const pageSize = 500;
+            let offset = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+                const data = await getSatellites({ limit: pageSize, offset });
+                const items = Array.isArray(data?.items) ? data.items : [];
+
+                items.forEach((item) => {
+                    metaMap[item.id] = item;
+                });
+
+                hasMore = items.length === pageSize;
+                offset += pageSize;
+            }
+
             setSatelliteMetadata(metaMap);
         } catch (err) {
             console.error('Ошибка загрузки метаданных:', err);
         }
     };
 
-    const fetchPositions = async () => {
+    const fetchPositions = useCallback(async () => {
+        if (isFetchingPositionsRef.current) return;
+        isFetchingPositionsRef.current = true;
         try {
-            const res = await axios.get('http://127.0.0.1:8000/api/v1/satellites/positions');
-            setSatellitesPosition(res.data);
+            const data = await getSatellitePositions(buildPositionFilters(filters));
+            setSatellitesPosition(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error('Ошибка загрузки позиций:', err);
+        } finally {
+            isFetchingPositionsRef.current = false;
         }
-    };
+    }, [filters]);
 
     const getCountryByCoordinates = async (lat, lon) => {
         try {
-            const response = await axios.get(
+            const response = await fetch(
                 `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=3&addressdetails=1`
             );
-            const address = response.data.address;
+            const data = await response.json();
+            const address = data.address;
             return address.country || address.country_code?.toUpperCase() || null;
         } catch (err) {
             console.error('Ошибка определения страны:', err);
@@ -327,13 +588,6 @@ const SatelliteTracker = () => {
 
     const handleSpeedChange = (newSpeed) => {
         setSpeed(newSpeed);
-
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-        }
-
-        const intervalTime = Math.max(50, 5000 / newSpeed);
-        intervalRef.current = setInterval(fetchPositions, intervalTime);
     };
 
     const handleFilterChange = (newFilters) => {
@@ -454,35 +708,31 @@ const SatelliteTracker = () => {
             const currentSat = satellitesPosition.find((sat) => sat.satellite_id === satelliteId);
             if (!currentSat) return;
 
-            const res = await axios.get(`http://127.0.0.1:8000/api/v1/satellites/${satelliteId}/coverage`, {
-                params: {
-                    lat: currentSat.geodetic.lat,
-                    lon: currentSat.geodetic.lon,
-                    timestamp: currentSat.timestamp,
-                },
+            const data = await getSatelliteCoverage(satelliteId, {
+                timestamp: currentSat.timestamp,
             });
 
-            setCoverageFootprint(res.data);
+            setCoverageFootprint(data);
         } catch (err) {
             console.error('Ошибка загрузки зоны покрытия:', err);
             setCoverageFootprint(null);
         }
     }, [satellitesPosition]);
 
-    const fetchTrajectory = async (satelliteId) => {
-        const now = new Date();
-        const startTime = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-        const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const fetchTrajectory = useCallback(async (satelliteId) => {
+        const currentSat = satellitesPosition.find((sat) => sat.satellite_id === satelliteId);
+        const centerTime = currentSat?.timestamp ? new Date(currentSat.timestamp) : new Date();
+        const startTime = new Date(centerTime.getTime() - 2 * 60 * 60 * 1000);
+        const endTime = new Date(centerTime.getTime() + 2 * 60 * 60 * 1000);
 
         try {
-            const response = await axios.get(`http://127.0.0.1:8000/api/v1/satellites/${satelliteId}/track`, {
-                params: {
-                    start_time: startTime.toISOString(),
-                    end_time: endTime.toISOString(),
-                },
+            const response = await getSatelliteTrack(satelliteId, {
+                start_time: startTime.toISOString(),
+                end_time: endTime.toISOString(),
+                step_seconds: 60,
             });
 
-            const trajectoryData = response.data?.points;
+            const trajectoryData = response?.points;
 
             if (Array.isArray(trajectoryData)) {
                 const validPoints = trajectoryData
@@ -513,55 +763,44 @@ const SatelliteTracker = () => {
             console.error(`Ошибка загрузки траектории для спутника ${satelliteId}:`, err);
             setCurrentTrajectory([]);
         }
-    };
+    }, [satellitesPosition]);
 
-    const fetchVisibility = async (satelliteId) => {
+    const fetchVisibility = useCallback(async (satelliteId) => {
         try {
-            const res = await axios.get(`http://127.0.0.1:8000/api/v1/satellites/${satelliteId}/visibility`);
-            setVisibilityFootprint(res.data);
+            const currentSat = satellitesPosition.find((sat) => sat.satellite_id === satelliteId);
+            const data = await getSatelliteVisibility(satelliteId, {
+                timestamp: currentSat?.timestamp,
+            });
+            setVisibilityFootprint(data);
         } catch (err) {
             console.error('Ошибка загрузки зоны радиовидимости:', err);
             setVisibilityFootprint(null);
         }
-    };
-
-    useEffect(() => {
-        let filtered = [...satellitesPosition];
-
-        if (filters.country) {
-            filtered = filtered.filter((pos) => {
-                const meta = satelliteMetadata[pos.satellite_id];
-                return meta && meta.country === filters.country;
-            });
-        }
-        if (filters.orbitType) {
-            filtered = filtered.filter((pos) => {
-                const meta = satelliteMetadata[pos.satellite_id];
-                return meta && meta.orbit_type === filters.orbitType;
-            });
-        }
-        if (filters.purpose) {
-            filtered = filtered.filter((pos) => {
-                const meta = satelliteMetadata[pos.satellite_id];
-                return meta && meta.purpose === filters.purpose;
-            });
-        }
-        setFilteredSatellites(filtered);
-    }, [filters, satellitesPosition, satelliteMetadata]);
+    }, [satellitesPosition]);
 
     useEffect(() => {
         fetchMetadata();
-        fetchPositions();
         fetchSubscriptions();
+    }, []);
 
-        intervalRef.current = setInterval(fetchPositions, 5000);
+    useEffect(() => {
+        fetchPositions();
+    }, [fetchPositions]);
+
+    useEffect(() => {
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+        }
+
+        const intervalTime = Math.max(MAX_SPEED_REQUEST_RATE_MS, Math.floor(5000 / Math.max(speed, 1)));
+        intervalRef.current = setInterval(fetchPositions, intervalTime);
 
         return () => {
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
             }
         };
-    }, []);
+    }, [fetchPositions, speed]);
 
     useEffect(() => {
         if (!selectedSatelliteId) return;
@@ -571,7 +810,7 @@ const SatelliteTracker = () => {
             fetchCoverage(selectedSatelliteId);
             fetchVisibility(selectedSatelliteId);
         }
-    }, [fetchCoverage, satellitesPosition, selectedSatelliteId]);
+    }, [fetchCoverage, fetchVisibility, satellitesPosition, selectedSatelliteId]);
 
     useEffect(() => {
         const handleKeyDown = (event) => {
@@ -592,13 +831,40 @@ const SatelliteTracker = () => {
         } else {
             setCurrentTrajectory([]);
         }
-    }, [selectedSatelliteId]);
+    }, [fetchTrajectory, selectedSatelliteId]);
 
-    const satellitesForSidebar = Object.values(satelliteMetadata).filter((meta) => meta !== null);
+    useEffect(() => {
+        if (!selectedSatelliteId) return;
+        const stillVisible = filteredSatellites.some((sat) => sat.satellite_id === selectedSatelliteId);
+        if (!stillVisible) {
+            setSelectedSatelliteId(null);
+            setCurrentTrajectory([]);
+            setCoverageFootprint(null);
+            setVisibilityFootprint(null);
+        }
+    }, [filteredSatellites, selectedSatelliteId]);
 
-    const getSatelliteInfo = (satId) => satelliteMetadata[satId] || null;
+    const satellitesForSidebar = useMemo(() => {
+        const byId = new Map();
 
-    const handleSatelliteClick = (satelliteId) => {
+        satellitesPosition.forEach((pos) => {
+            const meta = satelliteMetadata[pos.satellite_id];
+            byId.set(pos.satellite_id, {
+                id: pos.satellite_id,
+                name: meta?.name || pos.satellite_name || `Спутник ${pos.satellite_id}`,
+                country: meta?.country || pos.country || 'Unknown',
+                operator: meta?.operator || pos.operator || 'Unknown',
+                orbit_type: meta?.orbit_type || pos.orbit_type || 'Unknown',
+                purpose: meta?.purpose || pos.purpose || 'Unknown',
+                approx_altitude_km: meta?.approx_altitude_km ?? pos.geodetic?.alt_km ?? null,
+                period_minutes: meta?.period_minutes ?? pos.period_minutes ?? null,
+            });
+        });
+
+        return Array.from(byId.values());
+    }, [satelliteMetadata, satellitesPosition]);
+
+    const handleSatelliteClick = useCallback((satelliteId) => {
         if (selectedSatelliteId === satelliteId) {
             setSelectedSatelliteId(null);
             setVisibilityFootprint(null);
@@ -608,7 +874,7 @@ const SatelliteTracker = () => {
             fetchCoverage(satelliteId);
             fetchVisibility(satelliteId);
         }
-    };
+    }, [fetchCoverage, fetchVisibility, selectedSatelliteId]);
 
     return (
         <div>
@@ -636,20 +902,29 @@ const SatelliteTracker = () => {
                 selectedSatelliteName={selectedSatelliteName}
                 minElevationDeg={minElevationDeg}
                 onMinElevationChange={(value) => setMinElevationDeg(Math.max(0, Math.min(45, value)))}
+                fancyMode={fancyMode}
+                onFancyModeChange={onFancyModeChange}
             />
 
-            <MapContainer center={[0, 0]} zoom={2} zoomControl={false} style={{ height: '100vh', width: '100%' }}>
+            <MapContainer center={[0, 0]} zoom={2} zoomControl={false} preferCanvas style={{ height: '100vh', width: '100%' }}>
                 <ZoomControl position="bottomleft" />
                 <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 />
 
+                <SatelliteCanvasLayer
+                    satellites={filteredSatellites}
+                    selectedSatelliteId={selectedSatelliteId}
+                    onSatelliteClick={handleSatelliteClick}
+                    fancyMode={fancyMode}
+                />
+
                 <MapClickHandler onMapClick={handleMapClick} />
 
-                {currentTrajectory.length > 1 && selectedSatelliteId && (
+                {segmentedTrajectory.length > 0 && selectedSatelliteId && (
                     <Polyline
-                        positions={currentTrajectory.map((p) => [p.lat, p.lon])}
+                        positions={segmentedTrajectory}
                         color="#ff7800"
                         weight={2}
                         dashArray="5, 5"
@@ -675,50 +950,37 @@ const SatelliteTracker = () => {
                     </Marker>
                 )}
 
-                {filteredSatellites.map((pos) => {
-                    const meta = getSatelliteInfo(pos.satellite_id);
-                    if (!meta) return null;
-
-                    const bearing = calculateBearingFromVelocity(pos);
-                    const rotatedIcon = getRotatedIcon(bearing);
-
-                    return (
-                        <Marker
-                            key={pos.satellite_id}
-                            position={[pos.geodetic.lat, pos.geodetic.lon]}
-                            icon={rotatedIcon}
-                            eventHandlers={{
-                                click: () => handleSatelliteClick(pos.satellite_id),
-                            }}
-                        >
-                            <Popup>
-                                <h3>{meta.name}</h3>
-                                <strong>Страна/Оператор:</strong> {meta.country} / {meta.operator}
+                {selectedSatellitePosition && selectedSatelliteInfo && (
+                    <Popup
+                        position={[selectedSatellitePosition.geodetic.lat, selectedSatellitePosition.geodetic.lon]}
+                        key={`${selectedSatellitePosition.satellite_id}-${selectedSatellitePosition.timestamp}`}
+                    >
+                        <h3>{selectedSatelliteInfo.name}</h3>
+                        <strong>Страна/Оператор:</strong> {selectedSatelliteInfo.country} / {selectedSatelliteInfo.operator}
+                        <br />
+                        <strong>Тип орбиты:</strong> {selectedSatelliteInfo.orbit_type}
+                        <br />
+                        <strong>Высота орбиты:</strong>{' '}
+                        {selectedSatelliteInfo.approx_altitude_km != null ? `~${Number(selectedSatelliteInfo.approx_altitude_km).toFixed(0)} км` : 'N/A'}
+                        <br />
+                        <strong>Период обращения:</strong> {selectedSatelliteInfo.period_minutes != null ? `${selectedSatelliteInfo.period_minutes} мин` : 'N/A'}
+                        <br />
+                        <strong>Текущие координаты:</strong>
+                        <br />
+                        Lat: {selectedSatellitePosition.geodetic.lat.toFixed(4)}°, Lon: {selectedSatellitePosition.geodetic.lon.toFixed(4)}°
+                        <br />
+                        {selectedSatellitePosition.velocity && (
+                            <>
+                                <strong>Скорость (Vx, Vy):</strong> {selectedSatellitePosition.velocity.vx?.toFixed(4) || 'N/A'},{' '}
+                                {selectedSatellitePosition.velocity.vy?.toFixed(4) || 'N/A'}
                                 <br />
-                                <strong>Тип орбиты:</strong> {meta.orbit_type}
+                                <strong>Курс (расчётный):</strong> {selectedSatelliteInfo.bearing.toFixed(2)}°
                                 <br />
-                                <strong>Высота орбиты:</strong> ~{meta.approx_altitude_km} км
-                                <br />
-                                <strong>Период обращения:</strong> {meta.period_minutes} мин
-                                <br />
-                                <strong>Текущие координаты:</strong>
-                                <br />
-                                Lat: {pos.geodetic.lat.toFixed(4)}°, Lon: {pos.geodetic.lon.toFixed(4)}°
-                                <br />
-                                {pos.velocity && (
-                                    <>
-                                        <strong>Скорость (Vx, Vy):</strong> {pos.velocity.vx?.toFixed(4) || 'N/A'},{' '}
-                                        {pos.velocity.vy?.toFixed(4) || 'N/A'}
-                                        <br />
-                                        <strong>Курс (расчётный):</strong> {bearing.toFixed(2)}°
-                                        <br />
-                                    </>
-                                )}
-                                <strong>Время:</strong> {new Date(pos.timestamp).toLocaleString()}
-                            </Popup>
-                        </Marker>
-                    );
-                })}
+                            </>
+                        )}
+                        <strong>Время:</strong> {new Date(selectedSatellitePosition.timestamp).toLocaleString()}
+                    </Popup>
+                )}
 
                 {workingPolygonPositions.length > 2 ? (
                     <Polygon

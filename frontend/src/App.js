@@ -309,7 +309,7 @@ function App() {
       <main className="app-content">
         {activeView === '2d' ? (
           <div className="view-layer view-layer-2d">
-            <SatelliteTracker />
+            <SatelliteTracker fancyMode={fancyMode} onFancyModeChange={setFancyMode} />
           </div>
         ) : (
           <div className="view-layer view-layer-3d">

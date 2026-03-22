@@ -28,6 +28,8 @@ const Sidebar = ({
     selectedSatelliteName,
     minElevationDeg,
     onMinElevationChange,
+    fancyMode,
+    onFancyModeChange,
 }) => {
     const [filters, setFilters] = useState({
         country: '',
@@ -201,6 +203,23 @@ const Sidebar = ({
                                     ? `Фиолетовая зона строится для «${selectedSatelliteName}».`
                                     : 'Выберите спутник на карте, чтобы увидеть фиолетовую рабочую зону.'}
                             </p>
+                        </div>
+
+                        <div className="speed-section fancy-section">
+                            <label className="filter-label">✨ Отрисовка спутников</label>
+                            <label className="compact-fancy-toggle" htmlFor="fancy-mode-toggle-2d">
+                                <input
+                                    id="fancy-mode-toggle-2d"
+                                    type="checkbox"
+                                    checked={Boolean(fancyMode)}
+                                    onChange={(event) => onFancyModeChange(event.target.checked)}
+                                />
+                                <span className="compact-fancy-toggle__slider" aria-hidden="true" />
+                                <span className="compact-fancy-toggle__copy">
+                                    <strong>Fancy режим</strong>
+                                    <small>{fancyMode ? 'Маленькая иконка спутника' : 'Быстрые точки на canvas'}</small>
+                                </span>
+                            </label>
                         </div>
                     </>
                 )}
