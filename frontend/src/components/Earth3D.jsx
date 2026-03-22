@@ -337,7 +337,7 @@ function SatelliteCloudFancy({
   );
 }
 
-function SatelliteCloud({ fancy, ...props }) {
+function SatelliteCloud({ fancy = DEFAULT_FANCY_RENDERING, ...props }) {
   return fancy ? <SatelliteCloudFancy {...props} /> : <SatelliteCloudFast {...props} />;
 }
 
@@ -440,7 +440,7 @@ function TrackLine({ track }) {
   );
 }
 
-function FootprintLine({ footprint, selectedSatellite, timeRef, altitudeOffsetKm = 2, color, kind }) {
+function FootprintLine({ footprint, selectedSatellite, timeRef, altitudeOffsetKm = 2, color, kind, minElevationDeg = 15 }) {
   const geometryRef = useRef(null);
 
   const hasData = Boolean(selectedSatellite || footprint?.polygon?.coordinates?.[0]?.length);
@@ -449,10 +449,10 @@ function FootprintLine({ footprint, selectedSatellite, timeRef, altitudeOffsetKm
     if (!geometryRef.current || !hasData) return;
 
     const dynamicCenter = currentGeodeticFromPosition(selectedSatellite, timeRef.current);
-    const angularRadiusDeg = Number.isFinite(footprint?.angular_radius_deg)
-      ? footprint.angular_radius_deg
-      : dynamicCenter
-        ? footprintAngularRadiusDeg(dynamicCenter.alt_km, kind)
+    const angularRadiusDeg = dynamicCenter
+      ? footprintAngularRadiusDeg(dynamicCenter.alt_km, kind, minElevationDeg)
+      : Number.isFinite(footprint?.angular_radius_deg)
+        ? footprint.angular_radius_deg
         : null;
 
     const coordinates = dynamicCenter && angularRadiusDeg != null
@@ -633,8 +633,9 @@ function SceneContent({
   selectedPoint,
   track,
   visibilityFootprint,
-  coverageFootprint,
-  fancyMode,
+  elevationFootprint,
+  minElevationDeg = 15,
+  fancyMode = DEFAULT_FANCY_RENDERING,
 }) {
   const renderedPositionsRef = useRef(new Float32Array(0));
   const renderedIdsRef = useRef([]);
@@ -687,12 +688,13 @@ function SceneContent({
         kind="visibility"
       />
       <FootprintLine
-        footprint={coverageFootprint}
+        footprint={elevationFootprint}
         selectedSatellite={selectedSatellite}
         timeRef={timeRef}
         altitudeOffsetKm={5}
         color="#a855f7"
-        kind="coverage"
+        kind="min_elevation"
+        minElevationDeg={minElevationDeg}
       />
 
       <OrbitControls enablePan enableZoom enableRotate minDistance={3.2} maxDistance={14} />
@@ -712,7 +714,8 @@ export default function Earth3D({
   selectedPoint,
   track,
   visibilityFootprint,
-  coverageFootprint,
+  elevationFootprint,
+  minElevationDeg = 15,
   fancyMode = DEFAULT_FANCY_RENDERING,
 }) {
   return (
@@ -735,7 +738,8 @@ export default function Earth3D({
           selectedPoint={selectedPoint}
           track={track}
           visibilityFootprint={visibilityFootprint}
-          coverageFootprint={coverageFootprint}
+          elevationFootprint={elevationFootprint}
+          minElevationDeg={minElevationDeg}
           fancyMode={fancyMode}
         />
       </Canvas>

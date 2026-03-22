@@ -17,7 +17,8 @@ export default function SatelliteDetailsPanel({
   selectedSatellitePreview,
   track,
   visibilityFootprint,
-  coverageFootprint,
+  elevationFootprint,
+  minElevationDeg,
   loading,
   error,
 }) {
@@ -27,7 +28,7 @@ export default function SatelliteDetailsPanel({
         <div className="section-header">
           <h3>Карточка спутника</h3>
         </div>
-        <p className="muted-text">Выберите спутник в 3D, чтобы загрузить карточку, трек, зоны видимости и данные о следующем пролёте.</p>
+        <p className="muted-text">Выберите спутник в 3D, чтобы загрузить карточку, трек, геометрическую зону видимости, рабочую зону по углу места и данные о следующем пролёте.</p>
       </section>
     );
   }
@@ -85,13 +86,27 @@ export default function SatelliteDetailsPanel({
             <p>Траектория</p>
             <strong>{trackPointsCount ? `${trackPointsCount} точек` : 'нет данных'}</strong>
           </div>
-          <div className="result-item compact">
-            <p>Зона радиовидимости</p>
-            <strong>{visibilityFootprint?.polygon?.coordinates?.[0]?.length ? 'построена' : 'нет данных'}</strong>
+          <div className="result-item compact result-item-wide">
+            <div>
+              <p>Зелёная зона: геометрическая видимость (0°)</p>
+              <p className="muted-text">Спутник выше горизонта для наблюдателя в этой области.</p>
+            </div>
+            <div className="footprint-stats">
+              <strong>{visibilityFootprint?.polygon?.coordinates?.[0]?.length ? 'построена' : 'нет данных'}</strong>
+              <span>Угол: {formatCompactNumber(visibilityFootprint?.angular_radius_deg, 1)}°</span>
+              <span>Радиус: {formatCompactNumber(visibilityFootprint?.radius_km, 0)} км</span>
+            </div>
           </div>
-          <div className="result-item compact">
-            <p>Зона покрытия</p>
-            <strong>{coverageFootprint?.polygon?.coordinates?.[0]?.length ? 'построена' : 'нет данных'}</strong>
+          <div className="result-item compact result-item-wide">
+            <div>
+              <p>Фиолетовая зона: видимость при угле места ≥ {formatCompactNumber(minElevationDeg, 0)}°</p>
+              <p className="muted-text">Это рабочая зона, где спутник уже поднялся выше заданного угла места.</p>
+            </div>
+            <div className="footprint-stats">
+              <strong>{Number.isFinite(elevationFootprint?.angular_radius_deg) ? 'построена' : 'нет данных'}</strong>
+              <span>Угол: {formatCompactNumber(elevationFootprint?.angular_radius_deg, 1)}°</span>
+              <span>Радиус: {formatCompactNumber(elevationFootprint?.surface_radius_km, 0)} км</span>
+            </div>
           </div>
         </div>
       </div>
