@@ -1,0 +1,670 @@
+
+
+/* ПРАВАЯ ПАНЕЛЬ */
+.sidebar-right {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 320px;
+    max-height: 90vh;
+    background: rgba(30, 30, 40, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 16px;
+    color: white;
+    z-index: 1000;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    font-family: sans-serif;
+}
+
+/* Общие стили */
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.clear-btn {
+    background: rgba(255, 100, 100, 0.8);
+    border: none;
+    color: white;
+    padding: 5px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: background 0.2s;
+}
+
+.clear-btn:hover {
+    background: rgba(255, 100, 100, 1);
+}
+
+.filter-section {
+    margin-bottom: 16px;
+}
+
+.filter-label {
+    display: block;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 6px;
+}
+
+.filter-select {
+    width: 100%;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.filter-select option {
+    background: #2a2a2e;
+}
+
+.stats-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stats-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+    color: #61dafb;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 0.8rem;
+}
+
+.stat-item span {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.stat-item strong {
+    color: #61dafb;
+}
+
+/* Стили для правой панели */
+.flyovers-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.flyovers-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.mode-switch {
+    display: flex;
+    gap: 6px;
+}
+
+.mode-btn {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    border-radius: 20px;
+    border: none;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    transition: all 0.2s;
+}
+
+.mode-btn.active {
+    background: #61dafb;
+    color: #1a1a2e;
+}
+
+.mode-btn:hover {
+    background: rgba(97, 218, 251, 0.7);
+    color: #1a1a2e;
+}
+
+.flyovers-hint {
+    font-size: 0.85rem;
+    color: #aaa;
+    margin: 10px 0;
+}
+
+.selected-info {
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    color: #61dafb;
+    padding: 8px;
+    background: rgba(97, 218, 251, 0.1);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.country-select {
+    width: 100%;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-bottom: 12px;
+}
+
+.country-select option {
+    background: #2a2a2e;
+}
+
+.loading {
+    text-align: center;
+    padding: 20px;
+    color: #aaa;
+}
+
+.flyovers-list {
+    margin-top: 10px;
+}
+
+.flyovers-label {
+    font-size: 0.7rem;
+    color: #aaa;
+    margin-bottom: 8px;
+}
+
+.flyover-item {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    font-size: 0.75rem;
+}
+
+.flyover-name {
+    margin-bottom: 4px;
+}
+
+.flyover-time {
+    font-size: 0.7rem;
+    color: #61dafb;
+    margin-bottom: 4px;
+}
+
+.flyover-details {
+    font-size: 0.65rem;
+    color: #ccc;
+    margin-bottom: 4px;
+}
+
+.flyover-meta {
+    font-size: 0.6rem;
+    color: #aaa;
+}
+
+.no-flyovers {
+    font-size: 0.8rem;
+    color: #ffaa66;
+    text-align: center;
+    padding: 15px;
+}
+
+/* Скролл */
+.sidebar-left::-webkit-scrollbar,
+.sidebar-right::-webkit-scrollbar {
+    width: 4px;
+}
+
+/* Блок скорости */
+.speed-section {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.speed-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.speed-btn {
+    flex: 1;
+    padding: 6px 0;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.speed-btn:hover {
+    background: rgba(97, 218, 251, 0.3);
+    border-color: #61dafb;
+}
+
+.speed-btn.active {
+    background: #61dafb;
+    color: #1a1a2e;
+    border-color: #61dafb;
+}
+
+.speed-btn.active:hover {
+    background: #61dafb;
+}
+
+
+
+/* ПРАВАЯ ПАНЕЛЬ */
+.sidebar-right {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 340px;
+    max-height: 90vh;
+    background: rgba(20, 20, 30, 0.95);
+    backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 20px;
+    color: white;
+    z-index: 1000;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.flyovers-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.flyovers-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+}
+
+.mode-switch {
+    display: flex;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 3px;
+    border-radius: 30px;
+}
+
+.mode-btn {
+    padding: 5px 12px;
+    font-size: 0.7rem;
+    border-radius: 30px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.mode-btn.active {
+    background: linear-gradient(135deg, #61dafb, #4a9eff);
+    color: #1a1a2e;
+    box-shadow: 0 2px 8px rgba(97, 218, 251, 0.3);
+}
+
+.mode-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.country-select {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    color: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+
+.country-select:hover {
+    border-color: rgba(97, 218, 251, 0.5);
+}
+
+.selected-info {
+    margin-bottom: 16px;
+    font-size: 0.8rem;
+    color: #61dafb;
+    padding: 10px;
+    background: rgba(97, 218, 251, 0.1);
+    border-radius: 12px;
+    text-align: center;
+    font-weight: 500;
+    border: 1px solid rgba(97, 218, 251, 0.3);
+}
+
+.flyovers-list {
+    margin-top: 16px;
+}
+
+.flyovers-label {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.flyover-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 10px;
+    transition: all 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.flyover-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(-2px);
+}
+
+.flyover-name {
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+}
+
+.flyover-time {
+    font-size: 0.7rem;
+    color: #61dafb;
+    margin-bottom: 6px;
+    font-family: monospace;
+}
+
+.flyover-details {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 6px;
+}
+
+.flyover-meta {
+    font-size: 0.6rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.no-flyovers {
+    text-align: center;
+    padding: 30px 20px;
+    color: #ffaa66;
+    font-size: 0.8rem;
+    background: rgba(255, 170, 102, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 170, 102, 0.3);
+}
+
+.flyovers-hint {
+    text-align: center;
+    padding: 30px 20px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.8rem;
+}
+
+.loading {
+    text-align: center;
+    padding: 30px 20px;
+    color: #61dafb;
+}
+
+/* ЛЕВАЯ ПАНЕЛЬ */
+.sidebar-left {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    width: 320px;
+    max-height: 90vh;
+    background: rgba(20, 20, 30, 0.95);
+    backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 20px;
+    color: white;
+    z-index: 1000;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Заголовок */
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: white;
+}
+
+.clear-btn {
+    background: rgba(255, 100, 100, 0.2);
+    border: 1px solid rgba(255, 100, 100, 0.5);
+    color: #ff6b6b;
+    padding: 6px 14px;
+    border-radius: 30px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.clear-btn:hover {
+    background: rgba(255, 100, 100, 0.4);
+    border-color: #ff6b6b;
+    transform: scale(0.98);
+}
+
+/* Секции фильтров */
+.filter-section {
+    margin-bottom: 20px;
+}
+
+.filter-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 8px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+.filter-label::before {
+    content: "▹";
+    color: #61dafb;
+    font-size: 0.7rem;
+}
+
+.filter-select {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    color: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.filter-select:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(97, 218, 251, 0.5);
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #61dafb;
+    box-shadow: 0 0 0 2px rgba(97, 218, 251, 0.2);
+}
+
+.filter-select option {
+    background: #1e1e2a;
+    color: white;
+}
+
+/* Статистика */
+.stats-section {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.stats-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 0.85rem;
+    color: #61dafb;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    padding: 6px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+}
+
+.stat-item span {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.stat-item strong {
+    color: #61dafb;
+    font-weight: 600;
+    background: rgba(97, 218, 251, 0.1);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+}
+
+/* Блок скорости */
+.speed-section {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.speed-section .filter-label {
+    margin-bottom: 12px;
+}
+
+.speed-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.speed-btn {
+    flex: 1;
+    padding: 8px 0;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 30px;
+    color: white;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.speed-btn:hover {
+    background: rgba(97, 218, 251, 0.2);
+    border-color: #61dafb;
+    transform: translateY(-1px);
+}
+
+.speed-btn.active {
+    background: linear-gradient(135deg, #61dafb, #4a9eff);
+    color: #1a1a2e;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(97, 218, 251, 0.3);
+}
+
+/* Скролл */
+.sidebar-left::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sidebar-left::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.sidebar-left::-webkit-scrollbar-thumb {
+    background: rgba(97, 218, 251, 0.5);
+    border-radius: 10px;
+}
+
+.sidebar-left::-webkit-scrollbar-thumb:hover {
+    background: #61dafb;
+}
+
+/* Стили для вкладок в аналитике */
+.tab-btn {
+    flex: 1;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+    background: rgba(97, 218, 251, 0.2);
+    color: #61dafb;
+}
+
+.tab-btn:hover:not(.active) {
+    background: rgba(97, 218, 251, 0.1);
+}

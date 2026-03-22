@@ -285,16 +285,14 @@ function App() {
         {activeView === '2d' ? (
           <div className="view-layer view-layer-2d">
             <SatelliteTracker />
-            <div className="floating-note left-note">
-              <strong>2D-режим сохранён</strong>
-              <p>Существующая Leaflet-реализация не переписывалась. Добавлены только общая оболочка приложения и переключатель режимов.</p>
-            </div>
           </div>
         ) : (
           <div className="view-layer view-layer-3d">
             <Earth3D
               satellites={satellitesFor3D}
               currentTime={currentTime}
+              isPlaying={isPlaying}
+              speedMultiplier={speedMultiplier}
               selectedSatellite={selectedSatelliteVisual}
               selectedSatelliteId={selectedSatelliteId}
               onSelectSatellite={setSelectedSatelliteId}
