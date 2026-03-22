@@ -230,7 +230,7 @@ const SatelliteCanvasLayer = ({ satellites, selectedSatelliteId, onSatelliteClic
                 } else {
                     ctx.beginPath();
                     ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
-                    ctx.fillStyle = isSelected ? '#f59e0b' : '#61dafb';
+                    ctx.fillStyle = isSelected ? '#f59e0b' : '#2563eb';
                     ctx.fill();
                     if (isSelected) {
                         ctx.lineWidth = 1.5;
