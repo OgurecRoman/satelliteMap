@@ -339,7 +339,11 @@ function App() {
                     checked={fancyMode}
                     onChange={(event) => setFancyMode(event.target.checked)}
                   />
-                  <span>Fancy режим</span>
+                  <span className="fancy-toggle-slider" aria-hidden="true" />
+                  <span className="fancy-toggle-copy">
+                    <strong>Fancy режим</strong>
+                    <small>{fancyMode ? 'Красивые 3D-сферы' : 'Быстрый рендер'}</small>
+                  </span>
                 </label>
                 {loadingState.positions ? <span className="status-pill">Обновляем опорные позиции…</span> : null}
               </div>

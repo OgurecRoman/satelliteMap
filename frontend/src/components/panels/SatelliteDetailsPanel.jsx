@@ -97,17 +97,17 @@ export default function SatelliteDetailsPanel({
       </div>
 
       <div className="info-card compact-card">
-        <h4>Следующий пролёт над выбранной точкой</h4>
+        <h4>Следующий пролёт выбранного спутника над точкой</h4>
         {selectedPoint && nextPass ? (
           <>
             <p>Точка: {formatCoordinate(selectedPoint.lat)}°, {formatCoordinate(selectedPoint.lon)}°</p>
-            <p>Вход: {formatTimestamp(nextPass.enter_time)}</p>
-            <p>Пик: {formatTimestamp(nextPass.peak_time)}</p>
-            <p>Выход: {formatTimestamp(nextPass.exit_time)}</p>
-            <p>Минимальная дистанция: {formatCoordinate(nextPass.min_distance_km)} км</p>
+            <p>Вход в зону видимости: {formatTimestamp(nextPass.enter_time)}</p>
+            <p>Максимальное сближение: {formatTimestamp(nextPass.peak_time)}</p>
+            <p>Выход из зоны видимости: {formatTimestamp(nextPass.exit_time)}</p>
+            <p>Минимальная дистанция до точки: {formatCoordinate(nextPass.min_distance_km)} км</p>
           </>
         ) : (
-          <p className="muted-text">Выберите точку на глобусе, чтобы запросить следующий пролёт.</p>
+          <p className="muted-text">Выберите спутник и точку на глобусе, чтобы посчитать его следующий пролёт.</p>
         )}
       </div>
     </section>
