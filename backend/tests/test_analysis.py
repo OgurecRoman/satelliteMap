@@ -55,3 +55,38 @@ def test_grouping_and_compare_groups(client):
     assert compare.status_code == 200
     compare_data = compare.json()
     assert len(compare_data["groups"]) == 2
+
+
+def test_point_analysis_rejects_too_many_calculations(client):
+    payload = {
+        "lat": 55.75,
+        "lon": 37.62,
+        "from_time": datetime.now(timezone.utc).isoformat(),
+        "horizon_hours": 168,
+        "step_seconds": 10,
+    }
+    response = client.post("/api/v1/analysis/passes-over-point", json=payload)
+    assert response.status_code == 400
+    assert "Слишком много расчётов" in response.json()["detail"]
+
+
+def test_point_analysis_rejects_invalid_coordinates(client):
+    payload = {
+        "lat": 999,
+        "lon": 37.62,
+        "from_time": datetime.now(timezone.utc).isoformat(),
+        "horizon_hours": 6,
+        "step_seconds": 600,
+    }
+    response = client.post("/api/v1/analysis/passes-over-point", json=payload)
+    assert response.status_code == 422
+
+
+def test_compare_groups_rejects_too_long_name(client):
+    payload = {
+        "groups": [
+            {"name": "A" * 41, "filters": {"operator": "NOAA"}},
+        ]
+    }
+    response = client.post("/api/v1/analysis/compare-groups", json=payload)
+    assert response.status_code == 422

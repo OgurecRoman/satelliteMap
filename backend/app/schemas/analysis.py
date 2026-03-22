@@ -7,6 +7,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.satellite import PassWindow, PointQuery, SatelliteSummary
 
+MAX_ANALYSIS_HORIZON_HOURS = 168
+MIN_ANALYSIS_STEP_SECONDS = 10
+MAX_ANALYSIS_STEP_SECONDS = 3600
+MAX_GROUP_NAME_LENGTH = 32
+MAX_COMPARE_GROUPS = 8
+
 
 class SatelliteFilters(BaseModel):
     country: str | None = None
@@ -43,13 +49,17 @@ class PointPassRequest(BaseModel):
     def validate_horizon(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("horizon_hours must be greater than 0")
+        if value > MAX_ANALYSIS_HORIZON_HOURS:
+            raise ValueError(f"horizon_hours must be less than or equal to {MAX_ANALYSIS_HORIZON_HOURS}")
         return value
 
     @field_validator("step_seconds")
     @classmethod
     def validate_step(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("step_seconds must be greater than 0")
+        if value < MIN_ANALYSIS_STEP_SECONDS:
+            raise ValueError(f"step_seconds must be greater than or equal to {MIN_ANALYSIS_STEP_SECONDS}")
+        if value > MAX_ANALYSIS_STEP_SECONDS:
+            raise ValueError(f"step_seconds must be less than or equal to {MAX_ANALYSIS_STEP_SECONDS}")
         return value
 
 
@@ -118,13 +128,17 @@ class RegionPassRequest(BaseModel):
     def validate_horizon(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("horizon_hours must be greater than 0")
+        if value > MAX_ANALYSIS_HORIZON_HOURS:
+            raise ValueError(f"horizon_hours must be less than or equal to {MAX_ANALYSIS_HORIZON_HOURS}")
         return value
 
     @field_validator("step_seconds")
     @classmethod
     def validate_step(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("step_seconds must be greater than 0")
+        if value < MIN_ANALYSIS_STEP_SECONDS:
+            raise ValueError(f"step_seconds must be greater than or equal to {MIN_ANALYSIS_STEP_SECONDS}")
+        if value > MAX_ANALYSIS_STEP_SECONDS:
+            raise ValueError(f"step_seconds must be less than or equal to {MAX_ANALYSIS_STEP_SECONDS}")
         return value
 
 
@@ -171,8 +185,16 @@ class GroupingResponse(BaseModel):
 
 
 class GroupDefinition(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=MAX_GROUP_NAME_LENGTH)
     filters: SatelliteFilters = Field(default_factory=SatelliteFilters)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Group name must not be empty")
+        return normalized
 
 
 class GroupStatistics(BaseModel):
@@ -195,6 +217,8 @@ class CompareGroupsRequest(BaseModel):
     def validate_groups(cls, value: list[GroupDefinition]) -> list[GroupDefinition]:
         if not value:
             raise ValueError("At least one group must be provided")
+        if len(value) > MAX_COMPARE_GROUPS:
+            raise ValueError(f"No more than {MAX_COMPARE_GROUPS} groups can be provided")
         return value
 
 

@@ -27,6 +27,9 @@ from app.utils.time import ensure_utc
 
 
 class SatelliteService:
+    PROPAGATION_FAILURE_PREFIX = "TLE propagation failed"
+    INVALID_TIME_MESSAGE = "Для выбранного времени не удалось рассчитать орбиту по текущему TLE."
+
     def __init__(self, session: Session):
         self.session = session
         self.repo = SatelliteRepository(session)
@@ -77,7 +80,11 @@ class SatelliteService:
 
     def get_position(self, satellite_id: int, timestamp: datetime | None) -> SatellitePositionResponse:
         satellite = self.get_satellite(satellite_id)
-        state = PropagationService.propagate(satellite.latest_tle.line1, satellite.latest_tle.line2, ensure_utc(timestamp))
+        try:
+            state = PropagationService.propagate(satellite.latest_tle.line1, satellite.latest_tle.line2, ensure_utc(timestamp))
+        except BadRequestError as exc:
+            self._raise_if_propagation_failure(exc)
+            raise
         return SatellitePositionResponse(
             satellite_id=satellite.id,
             satellite_name=satellite.name,
@@ -95,7 +102,12 @@ class SatelliteService:
         result: list[SatellitePositionResponse] = []
         append = result.append
         for satellite_id, satellite_name, line1, line2 in rows:
-            state = PropagationService.propagate_bulk(line1, line2, timestamp_utc)
+            try:
+                state = PropagationService.propagate_bulk(line1, line2, timestamp_utc)
+            except BadRequestError as exc:
+                if self._is_propagation_failure(exc):
+                    continue
+                raise
             append(
                 SatellitePositionResponse(
                     satellite_id=satellite_id,
@@ -133,7 +145,11 @@ class SatelliteService:
 
     def get_state_vector(self, satellite_id: int, timestamp: datetime | None) -> StateVectorResponse:
         satellite = self.get_satellite(satellite_id)
-        state = PropagationService.propagate(satellite.latest_tle.line1, satellite.latest_tle.line2, ensure_utc(timestamp))
+        try:
+            state = PropagationService.propagate(satellite.latest_tle.line1, satellite.latest_tle.line2, ensure_utc(timestamp))
+        except BadRequestError as exc:
+            self._raise_if_propagation_failure(exc)
+            raise
         return StateVectorResponse(
             satellite_id=satellite.id,
             satellite_name=satellite.name,
@@ -147,7 +163,11 @@ class SatelliteService:
 
     def get_track(self, satellite_id: int, start_time: datetime, end_time: datetime, step_seconds: int) -> GroundTrackResponse:
         satellite = self.get_satellite(satellite_id)
-        states = PropagationService.ground_track(satellite.latest_tle.line1, satellite.latest_tle.line2, start_time, end_time, step_seconds)
+        try:
+            states = PropagationService.ground_track(satellite.latest_tle.line1, satellite.latest_tle.line2, start_time, end_time, step_seconds)
+        except BadRequestError as exc:
+            self._raise_if_propagation_failure(exc)
+            raise
         return GroundTrackResponse(
             satellite_id=satellite.id,
             satellite_name=satellite.name,
@@ -166,7 +186,11 @@ class SatelliteService:
 
     def get_footprint(self, satellite_id: int, timestamp: datetime | None, kind: str) -> AreaFootprintResponse:
         satellite = self.get_satellite(satellite_id)
-        state = PropagationService.propagate(satellite.latest_tle.line1, satellite.latest_tle.line2, ensure_utc(timestamp))
+        try:
+            state = PropagationService.propagate(satellite.latest_tle.line1, satellite.latest_tle.line2, ensure_utc(timestamp))
+        except BadRequestError as exc:
+            self._raise_if_propagation_failure(exc)
+            raise
         angular_radius_deg, radius_km, polygon = PropagationService.build_footprint_polygon(
             state["geodetic"].lat,
             state["geodetic"].lon,
@@ -211,7 +235,11 @@ class SatelliteService:
         satellite = self.get_satellite(satellite_id)
         start = ensure_utc(from_time)
         end = start.replace(microsecond=0) + timedelta(hours=horizon_hours)
-        states = PropagationService.ground_track(satellite.latest_tle.line1, satellite.latest_tle.line2, start, end, step_seconds)
+        try:
+            states = PropagationService.ground_track(satellite.latest_tle.line1, satellite.latest_tle.line2, start, end, step_seconds)
+        except BadRequestError as exc:
+            self._raise_if_propagation_failure(exc)
+            raise
 
         current_window = None
         windows: list[PassWindow] = []
@@ -253,3 +281,10 @@ class SatelliteService:
             step_seconds=step_seconds,
             next_pass=windows[0] if windows else None,
         )
+
+    def _raise_if_propagation_failure(self, exc: BadRequestError) -> None:
+        if self._is_propagation_failure(exc):
+            raise BadRequestError(self.INVALID_TIME_MESSAGE) from exc
+
+    def _is_propagation_failure(self, exc: BadRequestError) -> bool:
+        return isinstance(exc.detail, str) and exc.detail.startswith(self.PROPAGATION_FAILURE_PREFIX)

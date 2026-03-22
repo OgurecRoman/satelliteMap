@@ -88,6 +88,9 @@ textarea { resize: vertical; }
 .compact-card { margin-top: 12px; }
 .result-list { display: grid; gap: 10px; margin-top: 10px; }
 .result-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(2, 8, 23, 0.55); }
+.result-item > div { min-width: 0; }
+.truncate-container { min-width: 0; flex: 1 1 auto; }
+.truncate-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-item.compact { align-items: center; }
 .result-item strong, .satellite-title-block h2 { margin: 0; }
 .satellite-title-block { margin-bottom: 14px; }

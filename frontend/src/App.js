@@ -270,7 +270,7 @@ function App() {
         <div className="brand-block">
           <div className="brand-mark">🛰️</div>
           <div>
-            <p className="eyebrow">Хакатон MVP</p>
+            <p className="eyebrow">Кодим сУтками</p>
             <h1>Платформа мониторинга пролётов спутников</h1>
           </div>
         </div>
