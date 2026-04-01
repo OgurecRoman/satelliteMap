@@ -32,8 +32,11 @@
 </p>
 
 <p align="center">
-  <img src="./docs/images/3d_zoomed_in.webp" alt="3D-режим: анализ пролёта над выбранной точкой" width="49%" />
-  <img src="./docs/images/compare_groups.webp" alt="Сравнение группировок спутников по параметрам и статистике" width="28%" />
+  <img src="./docs/images/3d_zoomed_in.webp" alt="3D-режим: анализ пролёта над выбранной точкой" width="70%" />
+</p>
+
+<p align="center">
+  <img src="./docs/images/compare_groups.webp" alt="Сравнение группировок спутников по параметрам и статистике" width="32%" />
 </p>
 
 ## Что умеет проект
