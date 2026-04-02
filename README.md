@@ -1,5 +1,9 @@
 # Платформа мониторинга пролётов спутников
 
+[![Deploy](https://github.com/OgurecRoman/satelliteMap/actions/workflows/deploy.yml/badge.svg)](https://github.com/OgurecRoman/satelliteMap/actions/workflows/deploy.yml)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
+
 Это хакатонный проект про спутники и TLE-данные.
 
 Берётся TLE, считается положение спутников, они показываются на карте, мы даём посмотреть, когда они пролетают над точкой или регионом.
@@ -174,3 +178,28 @@ http://localhost:3000
 ### Подписки
 - `POST /api/v1/notifications/subscriptions`
 - `GET /api/v1/notifications/subscriptions`
+
+## Разработчики
+
+<table align="center">
+  <tr>
+    <td align="center" width="200">
+      <a href="https://github.com/Aleksander1Byte">
+        <img src="https://github.com/Aleksander1Byte.png" width="100" alt="Aleksander1Byte" /><br><br>
+        <img src="https://img.shields.io/badge/Aleksander1Byte-181717?style=for-the-badge&logo=github&logoColor=white" alt="Aleksander1Byte badge" />
+      </a>
+    </td>
+    <td align="center" width="200">
+      <a href="https://github.com/OgurecRoman">
+        <img src="https://github.com/OgurecRoman.png" width="100" alt="OgurecRoman" /><br><br>
+        <img src="https://img.shields.io/badge/OgurecRoman-181717?style=for-the-badge&logo=github&logoColor=white" alt="OgurecRoman badge" />
+      </a>
+    </td>
+    <td align="center" width="200">
+      <a href="https://github.com/Chebooreka">
+        <img src="https://github.com/Chebooreka.png" width="100" alt="Chebooreka" /><br><br>
+        <img src="https://img.shields.io/badge/Chebooreka-181717?style=for-the-badge&logo=github&logoColor=white" alt="Chebooreka badge" />
+      </a>
+    </td>
+  </tr>
+</table>
